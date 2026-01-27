@@ -5,67 +5,67 @@ import (
 	"log"
 )
 
-type XPlatform struct {
+type XDriver struct {
 	ApiKey string
 }
 
-func (x *XPlatform) Name() string {
+func (x *XDriver) Name() string {
 	return "x"
 }
 
-func (x *XPlatform) Post(ctx context.Context, content string) (string, error) {
+func (x *XDriver) Post(ctx context.Context, content string) (string, error) {
 	log.Printf("Posting to X: %s", content)
 	// Placeholder for real API call
 	return "https://x.com/status/mock_id", nil
 }
 
-func (x *XPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) {
+func (x *XDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) {
 	return []Post{}, nil
 }
 
-type LinkedInPlatform struct {
+type LinkedInDriver struct {
 	AccessToken string
 }
 
-func (l *LinkedInPlatform) Name() string {
+func (l *LinkedInDriver) Name() string {
 	return "linkedin"
 }
 
-func (l *LinkedInPlatform) Post(ctx context.Context, content string) (string, error) {
+func (l *LinkedInDriver) Post(ctx context.Context, content string) (string, error) {
 	log.Printf("Posting to LinkedIn: %s", content)
 	return "https://www.linkedin.com/feed/update/mock_id", nil
 }
 
-func (l *LinkedInPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) {
+func (l *LinkedInDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) {
 	return []Post{}, nil
 }
 
-type FacebookPlatform struct{}
+type FacebookDriver struct{}
 
-func (f *FacebookPlatform) Name() string { return "facebook" }
-func (f *FacebookPlatform) Post(ctx context.Context, content string) (string, error) {
+func (f *FacebookDriver) Name() string { return "facebook" }
+func (f *FacebookDriver) Post(ctx context.Context, content string) (string, error) {
 	log.Printf("Posting to Facebook: %s", content)
 	return "https://facebook.com/mock_post", nil
 }
-func (f *FacebookPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+func (f *FacebookDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
 
-type InstagramPlatform struct{}
+type InstagramDriver struct{}
 
-func (i *InstagramPlatform) Name() string { return "instagram" }
-func (i *InstagramPlatform) Post(ctx context.Context, content string) (string, error) {
+func (i *InstagramDriver) Name() string { return "instagram" }
+func (i *InstagramDriver) Post(ctx context.Context, content string) (string, error) {
 	log.Printf("Posting to Instagram: %s", content)
 	return "https://instagram.com/mock_post", nil
 }
-func (i *InstagramPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+func (i *InstagramDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
 
-type ThreadsPlatform struct{}
+type ThreadsDriver struct{}
 
-func (t *ThreadsPlatform) Name() string { return "threads" }
-func (t *ThreadsPlatform) Post(ctx context.Context, content string) (string, error) {
+func (t *ThreadsDriver) Name() string { return "threads" }
+func (t *ThreadsDriver) Post(ctx context.Context, content string) (string, error) {
 	log.Printf("Posting to Threads: %s", content)
 	return "https://threads.net/mock_post", nil
 }
-func (t *ThreadsPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+func (t *ThreadsDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
 
 func init() {
 	// These would ideally be registered via config
