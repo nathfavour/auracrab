@@ -2,7 +2,6 @@ package skills
 
 import (
 "context"
-"encoding/json"
 "fmt"
 
 "github.com/nathfavour/auracrab/pkg/social"
@@ -13,73 +12,41 @@ type SocialSkill struct {
 }
 
 func NewSocialSkill() *SocialSkill {
-	mgr := social.NewManager()
-	// Register default platforms (placeholders)
-	mgr.Register(&social.XPlatform{})
-	mgr.Register(&social.LinkedInPlatform{})
-	mgr.Register(&social.FacebookPlatform{})
-	mgr.Register(&social.InstagramPlatform{})
-	mgr.Register(&social.ThreadsPlatform{})
-
-	return &SocialSkill{manager: mgr}
+	return &SocialSkill{
+		manager: social.GetManager(),
+	}
 }
 
 func (s *SocialSkill) Name() string {
-	return "social_post"
+	return "social"
 }
 
 func (s *SocialSkill) Description() string {
-	return "Post content to social media platforms (X, LinkedIn, Facebook, Instagram, Threads)."
+	return "Automate social media posts across X, LinkedIn, Facebook, Instagram, and Threads"
 }
 
-func (s *SocialSkill) Manifest() json.RawMessage {
-	manifest := map[string]interface{}{
-		"name":        s.Name(),
-		"description": s.Description(),
-		"parameters": map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"platform": map[string]interface{}{
-					"type":        "string",
-					"description": "The target platform (x, linkedin, facebook, instagram, threads)",
-					"enum":        []string{"x", "linkedin", "facebook", "instagram", "threads"},
-				},
-				"content": map[string]interface{}{
-					"type":        "string",
-					"description": "The content to post",
-				},
-			},
-			"required": []string{"platform", "content"},
-		},
+func (s *SocialSkill) Execute(ctx context.Context, action string, args map[string]interface{}) (string, error) {
+	switch action {
+	case "post":
+		platforms, ok := args["platforms"].([]interface{})
+		if !ok {
+			return "", fmt.Errorf("missing platforms (list of strings)")
+		}
+		content, ok := args["content"].(string)
+		if !ok {
+			return "", fmt.Errorf("missing content")
+		}
+
+		var platformStrings []string
+		for _, p := range platforms {
+			if ps, ok := p.(string); ok {
+				platformStrings = append(platformStrings, ps)
+			}
+		}
+
+		results := s.manager.PostToAll(ctx, content, platformStrings)
+		return results, nil
+	default:
+		return "", fmt.Errorf("unknown social action: %s", action)
 	}
-	data, _ := json.Marshal(manifest)
-	return json.RawMessage(data)
-}
-
-func (s *SocialSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
-	var params struct {
-		Platform string `json:"platform"`
-		Content  string `json:"content"`
-	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return "", fmt.Errorf("invalid arguments: %v", err)
-	}
-
-	p, err := s.manager.GetPlatform(params.Platform)
-	if err != nil {
-		// For now, let's simulate the other platforms if they aren't fully implemented
-		return fmt.Sprintf("Simulation: Posted '%s' to %s. (Platform driver pending full implementation)", params.Content, params.Platform), nil
-	}
-
-	url, err := p.Post(ctx, params.Content)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("Successfully posted to %s: %s", params.Platform, url), nil
-}
-
-func init() {
-	Register(NewSocialSkill())
 }
