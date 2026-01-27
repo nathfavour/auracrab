@@ -1,116 +1,119 @@
 package security
-package security
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}	// (Placeholder for checking if vibeauracle is misconfigured)	// Check for vibeauracle daemon statusfunc auditEcosystem(report *AuditReport) {}	}		}			})				Remediation: "Run auracrab as a non-privileged user.",				Severity:    SeverityWarn,				Description: "Auracrab is running as root. This increases the blast radius of any vulnerability.",				Title:       "Running as Root",				ID:          "env.root",			report.Findings = append(report.Findings, Finding{		if err == nil && currUser.Uid == "0" {		currUser, err := user.Current()		// Check for root execution	if runtime.GOOS == "linux" {func auditEnvironment(report *AuditReport) {}	return nil	}		}			})				Remediation: fmt.Sprintf("chmod 700 %s", target),				Severity:    SeverityWarn,				Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),				Title:       "Sensitive Directory is Group-Writable",				ID:          "fs.group_writable",			report.Findings = append(report.Findings, Finding{		if mode&0020 != 0 {		// Check for group-writable		}			})				Remediation: fmt.Sprintf("chmod 700 %s", target),				Severity:    SeverityCritical,				Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),				Title:       "Sensitive Directory is World-Writable",				ID:          "fs.world_writable",			report.Findings = append(report.Findings, Finding{		if mode&0002 != 0 {		// Check for world-writable		mode := info.Mode()		}			return err		if err != nil {		}			continue		if os.IsNotExist(err) {		info, err := os.Stat(target)	for _, target := range targets {	}		filepath.Join(home, ".vibeauracle"),		filepath.Join(home, ".local", "share", "auracrab"),	targets := []string{	}		return err	if err != nil {	home, err := os.UserHomeDir()func auditFilesystem(report *AuditReport) error {}	return report, nil	auditEcosystem(report)	// 3. Ecosystem Awareness (vibeauracle)	auditEnvironment(report)	// 2. Check System Environment	}		return nil, err	if err := auditFilesystem(report); err != nil {	// 1. Check Permissions of root config/state	}		Findings: make([]Finding, 0),	report := &AuditReport{func RunAudit() (*AuditReport, error) {}	Findings []Finding `json:"findings"`type AuditReport struct {}	Remediation string   `json:"remediation,omitempty"`	Severity    Severity `json:"severity"`	Description string   `json:"description"`	Title       string   `json:"title"`	ID          string   `json:"id"`type Finding struct {)	SeverityCritical Severity = "critical"	SeverityWarn     Severity = "warn"	SeverityInfo     Severity = "info"const (type Severity string)	"runtime"	"path/filepath"	"os/user"	"os"	"fmt"import (
+import (
+"fmt"
+"os"
+"os/user"
+"path/filepath"
+"runtime"
+)
+
+type Severity string
+
+const (
+SeverityInfo     Severity = "info"
+SeverityWarn     Severity = "warn"
+SeverityCritical Severity = "critical"
+)
+
+type Finding struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Severity    Severity `json:"severity"`
+	Remediation string   `json:"remediation,omitempty"`
+}
+
+type AuditReport struct {
+	Findings []Finding `json:"findings"`
+}
+
+func RunAudit() (*AuditReport, error) {
+	report := &AuditReport{
+		Findings: make([]Finding, 0),
+	}
+
+	if err := auditFilesystem(report); err != nil {
+		return nil, err
+	}
+
+	auditEnvironment(report)
+	auditEcosystem(report)
+
+	return report, nil
+}
+
+func auditFilesystem(report *AuditReport) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	targets := []string{
+		filepath.Join(home, ".local", "share", "auracrab"),
+		filepath.Join(home, ".vibeauracle"),
+	}
+
+	for _, target := range targets {
+		info, err := os.Stat(target)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		mode := info.Mode()
+		if mode&0002 != 0 {
+			report.Findings = append(report.Findings, Finding{
+ID:          "fs.world_writable",
+Title:       "Sensitive Directory is World-Writable",
+Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),
+				Severity:    SeverityCritical,
+				Remediation: fmt.Sprintf("chmod 700 %s", target),
+			})
+		}
+		if mode&0020 != 0 {
+			report.Findings = append(report.Findings, Finding{
+ID:          "fs.group_writable",
+Title:       "Sensitive Directory is Group-Writable",
+Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),
+				Severity:    SeverityWarn,
+				Remediation: fmt.Sprintf("chmod 700 %s", target),
+			})
+		}
+	}
+	return nil
+}
+
+func auditEnvironment(report *AuditReport) {
+	if runtime.GOOS == "linux" {
+		currUser, err := user.Current()
+		if err == nil && currUser.Uid == "0" {
+			report.Findings = append(report.Findings, Finding{
+ID:          "env.root",
+Title:       "Running as Root",
+Description: "Auracrab is running as root. This increases the blast radius.",
+Severity:    SeverityWarn,
+Remediation: "Run as a non-privileged user.",
+})
+		}
+	}
+
+	sensitiveKeys := []string{"GITHUB_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"}
+	for _, key := range sensitiveKeys {
+		if val := os.Getenv(key); val != "" {
+			report.Findings = append(report.Findings, Finding{
+ID:          "env.sensitive_var",
+Title:       fmt.Sprintf("Sensitive Env Var: %s", key),
+Description: fmt.Sprintf("%s is set in the environment.", key),
+Severity:    SeverityInfo,
+Remediation: "Consider using a secure vault.",
+})
+		}
+	}
+}
+
+func auditEcosystem(report *AuditReport) {
+	// check if vibeauracle is misconfigured
+}

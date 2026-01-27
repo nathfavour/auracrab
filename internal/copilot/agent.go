@@ -1,15 +1,15 @@
 package copilot
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log"
+"context"
+"encoding/json"
+"fmt"
+"log"
 
-	sdk "github.com/github/copilot-sdk/go"
-	"github.com/nathfavour/auracrab/pkg/core"
-	"github.com/nathfavour/auracrab/pkg/security"
-	"github.com/nathfavour/auracrab/pkg/skills"
+sdk "github.com/github/copilot-sdk/go"
+"github.com/nathfavour/auracrab/pkg/core"
+"github.com/nathfavour/auracrab/pkg/security"
+"github.com/nathfavour/auracrab/pkg/skills"
 )
 
 type Agent struct {
@@ -29,12 +29,11 @@ func (a *Agent) Start(ctx context.Context) error {
 		return err
 	}
 
-	// Define tools for the Copilot agent
 	startTaskTool := sdk.DefineTool("start_task", "Start a persistent autonomous task in Auracrab",
-		func(params struct {
-			Task string `json:"task" jsonschema:"Description of the task to perform"`
-		}, inv sdk.ToolInvocation) (any, error) {
-			butler := core.GetButler()
+func(params struct {
+Task string `json:"task" jsonschema:"Description of the task to perform"`
+}, inv sdk.ToolInvocation) (any, error) {
+butler := core.GetButler()
 			task, err := butler.StartTask(context.Background(), params.Task)
 			if err != nil {
 				return nil, err
@@ -43,8 +42,8 @@ func (a *Agent) Start(ctx context.Context) error {
 		})
 
 	auditTool := sdk.DefineTool("run_security_audit", "Run a deep security audit on the local system",
-		func(params struct{}, inv sdk.ToolInvocation) (any, error) {
-			report, err := security.RunAudit()
+func(params struct{}, inv sdk.ToolInvocation) (any, error) {
+report, err := security.RunAudit()
 			if err != nil {
 				return nil, err
 			}
@@ -52,22 +51,19 @@ func (a *Agent) Start(ctx context.Context) error {
 		})
 
 	statusTool := sdk.DefineTool("check_butler_status", "Check the current status and health of the Auracrab Butler",
-		func(params struct{}, inv sdk.ToolInvocation) (any, error) {
-			butler := core.GetButler()
+func(params struct{}, inv sdk.ToolInvocation) (any, error) {
+butler := core.GetButler()
 			return butler.GetStatus(), nil
 		})
 
-	// Register tools from the generic skills registry too
 	agentTools := []sdk.Tool{startTaskTool, auditTool, statusTool}
 	for _, s := range skills.GetRegistry() {
-		// Bridge generic skills to SDK tools
-		var manifestMap map[string]interface{}
-		_ = json.Unmarshal(s.Manifest(), &manifestMap)
-		
-		// Capture local s
 		skill := s
+		var manifestMap map[string]interface{}
+		_ = json.Unmarshal(skill.Manifest(), &manifestMap)
+		
 		agentTools = append(agentTools, sdk.Tool{
-			Name:        skill.Name(),
+Name:        skill.Name(),
 			Description: skill.Description(),
 			Parameters:  manifestMap["parameters"].(map[string]interface{}),
 			Handler: func(inv sdk.ToolInvocation) (sdk.ToolResult, error) {
@@ -85,7 +81,7 @@ func (a *Agent) Start(ctx context.Context) error {
 		Model: "gpt-4o",
 		Tools: agentTools,
 		SystemMessage: &sdk.SystemMessageConfig{
-			Content: "You are the Auracrab Digital Butler, a system-intimate AI agent. You help users manage persistent tasks and maintain system health. You are part of the vibeauracle ecosystem.",
+			Content: "You are the Auracrab Digital Butler, a system-intimate AI agent. You help users manage persistent tasks and maintain system health.",
 		},
 	})
 	if err != nil {
@@ -94,13 +90,12 @@ func (a *Agent) Start(ctx context.Context) error {
 
 	log.Println("Auracrab Copilot Agent session created.")
 	
-	// Keep the session alive and handle events
 	done := make(chan bool)
 	session.On(func(event sdk.SessionEvent) {
-		if event.Type == sdk.SessionIdle {
-			// In a CLI mode, we might want to signal completion
-		}
-	})
+if event.Type == sdk.SessionIdle {
+// Keep alive if needed
+}
+})
 
 	return nil
 }
