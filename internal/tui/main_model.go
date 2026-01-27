@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,54 +29,54 @@ var (
 
 	// Styles
 	styleHeader = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(white).
-		Background(purple).
-		Padding(0, 1).
-		MarginBottom(1)
+			Bold(true).
+			Foreground(white).
+			Background(purple).
+			Padding(0, 1).
+			MarginBottom(1)
 
 	styleSectionTitle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(purple).
-		MarginTop(1).
-		MarginBottom(1)
+				Bold(true).
+				Foreground(purple).
+				MarginTop(1).
+				MarginBottom(1)
 
 	styleTaskCard = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(gray).
-		Padding(0, 1).
-		MarginBottom(1).
-		Width(60)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(gray).
+			Padding(0, 1).
+			MarginBottom(1).
+			Width(60)
 
 	styleSelectedTask = styleTaskCard.Copy().
-		BorderForeground(purple).
-		Background(lipgloss.Color("#1A1A1A"))
+				BorderForeground(purple).
+				Background(lipgloss.Color("#1A1A1A"))
 
 	styleSidebar = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(gray).
-		PaddingLeft(2).
-		MarginLeft(2).
-		Width(30)
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(gray).
+			PaddingLeft(2).
+			MarginLeft(2).
+			Width(30)
 
 	styleFooter = lipgloss.NewStyle().
-		Foreground(gray).
-		MarginTop(1)
+			Foreground(gray).
+			MarginTop(1)
 
 	styleHealthOk   = lipgloss.NewStyle().Foreground(green)
 	styleHealthWarn = lipgloss.NewStyle().Foreground(red)
 
 	styleInput = lipgloss.NewStyle().
-		Foreground(white).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(purple).
-		Padding(0, 1).
-		Width(90)
+			Foreground(white).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(purple).
+			Padding(0, 1).
+			Width(90)
 
 	styleStatus = lipgloss.NewStyle().
-		Italic(true).
-		Foreground(gray).
-		MarginLeft(2)
+			Italic(true).
+			Foreground(gray).
+			MarginLeft(2)
 )
 
 type tickMsg time.Time
@@ -328,11 +327,7 @@ func gradientWord(word string, colors []lipgloss.Color, spaced bool) string {
 }
 
 func (m Model) takeScreenshot() (tea.Model, tea.Cmd) {
-	dir := "screenshots"
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		m.lastResponse = "Screenshot Error: " + err.Error()
-		return m, nil
-	}
+	dir := config.ScreenshotDir()
 
 	timestamp := time.Now().Format("2006-01-02_150405")
 	filename := fmt.Sprintf("auracrab_%s", timestamp)
@@ -348,7 +343,7 @@ func (m Model) takeScreenshot() (tea.Model, tea.Cmd) {
 	svgContent := convertAnsiToSVG(rawView)
 	_ = os.WriteFile(svgPath, []byte(svgContent), 0644)
 
-	err := convertToPNG(svgPath, pngPath)
+	err := m.convertToPNG(svgPath, pngPath)
 	if err != nil {
 		m.lastResponse = "Captured SVG (PNG failed: " + err.Error() + ")"
 	} else {
@@ -366,14 +361,34 @@ type ansiPart struct {
 	bold bool
 }
 
+// convertAnsiToSVG converts colored terminal output to a styled SVG ensemble
 func convertAnsiToSVG(ansi string) string {
 	lines := strings.Split(ansi, "\n")
-	reSGR := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
-	maxCols := 0
+	// Keep only SGR sequences (colors/styles). Remove cursor/alt-screen/etc.
+	reSGR := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	reCSI := regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
+	reOSC := regexp.MustCompile(`\x1b\][^\x07]*(\x07|\x1b\\)`)
+
+	cleanLines := make([]string, 0, len(lines))
 	for _, l := range lines {
-		visible := reSGR.ReplaceAllString(l, "")
-		cols := runewidth.StringWidth(visible)
+		cleanLines = append(cleanLines, sanitizeANSI(l, reCSI, reOSC))
+	}
+
+	// Detect a common full-width right border column (Lipgloss borders often
+	// render a vertical bar at the terminal width, making screenshots massive).
+	borderCol := detectRightBorderColumn(cleanLines, reSGR)
+
+	// Compute real content width (in terminal columns, not bytes), trimming
+	// trailing whitespace and ignoring the detected right-side border.
+	maxCols := 0
+	for _, l := range cleanLines {
+		cols := visibleTrimmedWidth(l, reSGR)
+		if borderCol > 0 && cols == borderCol {
+			if r, ok := lastNonSpaceRune(reSGR.ReplaceAllString(l, "")); ok && isBorderRune(r) {
+				cols -= runewidth.RuneWidth(r)
+			}
+		}
 		if cols > maxCols {
 			maxCols = cols
 		}
@@ -382,36 +397,65 @@ func convertAnsiToSVG(ansi string) string {
 		maxCols = 1
 	}
 
+	// Truncate lines to the computed width so the rendered SVG is actually cropped.
+	for i := range cleanLines {
+		cleanLines[i] = truncateAnsiLineToWidth(cleanLines[i], maxCols, reSGR)
+	}
+
+	// Refined dimensions
 	fontSize := 14
 	lineHeight := 1.25
 	charWidth := 8.2
+
 	paddingX := 30.0
 	paddingY := 60.0
 
 	width := float64(maxCols)*charWidth + (paddingX * 2)
-	height := float64(len(lines))*float64(fontSize)*lineHeight + paddingY + 40
+	height := float64(len(cleanLines))*float64(fontSize)*lineHeight + paddingY + 40
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf(`<svg width="%.1f" height="%.1f" viewBox="0 0 %.1f %.1f" xmlns="http://www.w3.org/2000/svg">`, width, height, width, height))
-	sb.WriteString(fmt.Sprintf(`<rect x="10" y="10" width="%.1f" height="%.1f" rx="12" fill="#0D0D0D" stroke="#7D56F4" stroke-width="2" />`, width-20, height-20))
-	sb.WriteString(`<text font-family="monospace" font-size="14" xml:space="preserve">`)
 
-	for i, line := range lines {
+	// Add Shadow
+	sb.WriteString(fmt.Sprintf(`<rect x="15" y="15" width="%.1f" height="%.1f" rx="12" fill="rgba(0,0,0,0.4)" filter="blur(8px)" />`, width-20, height-20))
+
+	// Main Frame
+	sb.WriteString(fmt.Sprintf(`<rect x="10" y="10" width="%.1f" height="%.1f" rx="12" fill="#0D0D0D" stroke="#7D56F4" stroke-width="2" />`, width-20, height-20))
+
+	// Title/Controls dots (Mac style)
+	sb.WriteString(`<circle cx="35" cy="30" r="5" fill="#FF5F56"/>`)
+	sb.WriteString(`<circle cx="55" cy="30" r="5" fill="#FFBD2E"/>`)
+	sb.WriteString(`<circle cx="75" cy="30" r="5" fill="#27C93F"/>`)
+
+	sb.WriteString(`<text font-family="Menlo, Monaco, Consolas, Courier New, monospace" font-size="14" xml:space="preserve">`)
+
+	for i, line := range cleanLines {
 		yPos := 70 + (i * int(float64(fontSize)*lineHeight))
 		sb.WriteString(fmt.Sprintf(`<tspan x="%d" y="%d">`, int(paddingX), yPos))
 
 		parts := parseAnsiLine(line, reSGR)
 		for _, p := range parts {
-			style := "fill:" + p.fg + ";"
+			style := ""
+			if p.fg != "" {
+				style += fmt.Sprintf("fill:%s;", p.fg)
+			} else {
+				style += "fill:#FAFAFA;"
+			}
 			if p.bold {
 				style += "font-weight:bold;"
 			}
-			text := strings.ReplaceAll(strings.ReplaceAll(p.text, "&", "&amp;"), "<", "&lt;")
-			text = strings.ReplaceAll(text, " ", "&#160;")
-			sb.WriteString(fmt.Sprintf(`<tspan style="%s">%s</tspan>`, style, text))
+
+			escapedText := strings.ReplaceAll(p.text, "&", "&amp;")
+			escapedText = strings.ReplaceAll(escapedText, "<", "&lt;")
+			escapedText = strings.ReplaceAll(escapedText, ">", "&gt;")
+			// Ensure spaces are visible
+			escapedText = strings.ReplaceAll(escapedText, " ", "&#160;")
+
+			sb.WriteString(fmt.Sprintf(`<tspan style="%s">%s</tspan>`, style, escapedText))
 		}
 		sb.WriteString(`</tspan>`)
 	}
+
 	sb.WriteString(`</text></svg>`)
 	return sb.String()
 }
