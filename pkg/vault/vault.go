@@ -1,92 +1,90 @@
 package vault
-package vault
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}	return "", fmt.Errorf("secret %s not found", key)	}		}			return val, nil		if val, ok := secrets[key]; ok {	if err := json.Unmarshal(data, &secrets); err == nil {	secrets := make(map[string]string)	}		return "", err	if err != nil {	data, err := os.ReadFile(path)	path := config.SecretsPath()	defer v.mu.RUnlock()	v.mu.RLock()	}		}			return string(item.Data), nil		if err == nil {		item, err := v.ring.Get(key)	if v.ring != nil {func (v *Vault) Get(key string) (string, error) {}	return os.WriteFile(path, data, 0600)	}		return err	if err != nil {	data, err := json.MarshalIndent(secrets, "", "  ")	secrets[key] = value	}		json.Unmarshal(data, &secrets)	if data, err := os.ReadFile(path); err == nil {	path := config.SecretsPath()	secrets := make(map[string]string)	defer v.mu.Unlock()	v.mu.Lock()	}		}			return nil		if err == nil {		})			Data: []byte(value),			Key:  key,		err := v.ring.Set(keyring.Item{	if v.ring != nil {func (v *Vault) Set(key, value string) error {}	return instance	})		}			instance.ring = ring		if err == nil {		})			ServiceName: "auracrab",		ring, err := keyring.Open(keyring.Config{		instance = &Vault{}	once.Do(func() {func GetVault() *Vault {)	once     sync.Once	instance *Vaultvar (}	mu   sync.RWMutex	ring keyring.Keyringtype Vault struct {)	"github.com/nathfavour/auracrab/pkg/config"	"github.com/99designs/keyring"	"sync"	"os"	"fmt"	"encoding/json"import (
+import (
+"encoding/json"
+"fmt"
+"os"
+"sync"
+
+"github.com/99designs/keyring"
+"github.com/nathfavour/auracrab/pkg/config"
+)
+
+type Vault struct {
+	ring keyring.Keyring
+	mu   sync.RWMutex
+}
+
+var (
+instance *Vault
+once     sync.Once
+)
+
+func GetVault() *Vault {
+	once.Do(func() {
+		instance = &Vault{}
+		ring, err := keyring.Open(keyring.Config{
+ServiceName: "auracrab",
+})
+		if err == nil {
+			instance.ring = ring
+		}
+	})
+	return instance
+}
+
+func (v *Vault) Set(key, value string) error {
+	if v.ring != nil {
+		err := v.ring.Set(keyring.Item{
+Key:  key,
+Data: []byte(value),
+})
+		if err == nil {
+			return nil
+		}
+	}
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	secrets := make(map[string]string)
+	path := config.SecretsPath()
+	if data, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(data, &secrets)
+	}
+
+	secrets[key] = value
+	data, err := json.MarshalIndent(secrets, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0600)
+}
+
+func (v *Vault) Get(key string) (string, error) {
+	if v.ring != nil {
+		item, err := v.ring.Get(key)
+		if err == nil {
+			return string(item.Data), nil
+		}
+	}
+
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	path := config.SecretsPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	secrets := make(map[string]string)
+	if err := json.Unmarshal(data, &secrets); err == nil {
+		if val, ok := secrets[key]; ok {
+			return val, nil
+		}
+	}
+
+	return "", fmt.Errorf("secret %s not found", key)
+}
