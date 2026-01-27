@@ -6,11 +6,9 @@ import (
 "time"
 
 tea "github.com/charmbracelet/bubbletea"
-"github.com/charmbracelet/lipgloss"
-"github.com/nathfavour/auracrab/pkg/core"
-"github.com/nathfavour/auracrab/pkg/skills"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/nathfavour/auracrab/pkg/core"
 )
-
 var (
 // Colors
 purple = lipgloss.Color("#7D56F4")
@@ -74,7 +72,6 @@ type Model struct {
 
 func InitialModel() Model {
 	butler := core.GetButler()
-	registry := skills.GetRegistry()
 	
 	var skillNames []string
 	// We can't easily list from registry without a new method, but we know the defaults
