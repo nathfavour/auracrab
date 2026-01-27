@@ -10,7 +10,8 @@ import (
 type Skill interface {
 	Name() string
 	Description() string
-	Execute(ctx context.Context, action string, args map[string]interface{}) (string, error)
+	Manifest() []byte
+	Execute(ctx context.Context, args json.RawMessage) (string, error)
 }
 
 type Registry struct {
@@ -19,8 +20,8 @@ type Registry struct {
 }
 
 var (
-defaultRegistry *Registry
-once            sync.Once
+	defaultRegistry *Registry
+	once            sync.Once
 )
 
 func GetRegistry() *Registry {
@@ -50,10 +51,13 @@ func (r *Registry) Get(name string) (Skill, bool) {
 	return s, ok
 }
 
-func (r *Registry) Execute(ctx context.Context, name string, action string, args map[string]interface{}) (string, error) {
-	s, ok := r.Get(name)
-	if !ok {
-		return "", fmt.Errorf("skill '%s' not found", name)
+func (r *Registry) List() []Skill {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var list []Skill
+	for _, s := range r.skills {
+		list = append(list, s)
 	}
-	return s.Execute(ctx, action, args)
+	return list
 }
+
