@@ -9,7 +9,7 @@
 </p>
 
 > [!IMPORTANT]
-> Auracrab is a core component of the **[vibeauracle](https://github.com/nathfavour/vibeauracle)** Go CLI ecosystem. It leverages **vibeauracle**'s advanced intelligence layer for repository-wide analysis, Copilot SDK planning, and multi-agent coordination.
+> Auracrab is a core component of the **[vibeauracle](https://github.com/nathfavour/vibeauracle)** Go CLI ecosystem. It leverages **vibeauracle**'s advanced intelligence layer for repository-wide analysis, Copilot SDK planning, and multi-agent coordination. **Note: `vibeauracle` is automatically installed and managed as a dependency during the Auracrab installation/update process.**
 
 <p align="center">
   <a href="https://github.com/nathfavour/auracrab/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/nathfavour/auracrab/release.yml?style=flat-square&logo=github" alt="Release"></a>
