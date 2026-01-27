@@ -48,7 +48,7 @@ func (s *AutoCommitSkill) Execute(ctx context.Context, args json.RawMessage) (st
 	if params.Path != "" {
 		cmd.Dir = params.Path
 	}
-	
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("autocommiter failed: %w\nOutput: %s", err, string(out))

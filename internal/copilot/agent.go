@@ -1,15 +1,15 @@
 package copilot
 
 import (
-"context"
-"encoding/json"
-"fmt"
-"log"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 
-sdk "github.com/github/copilot-sdk/go"
-"github.com/nathfavour/auracrab/pkg/core"
-"github.com/nathfavour/auracrab/pkg/security"
-"github.com/nathfavour/auracrab/pkg/skills"
+	sdk "github.com/github/copilot-sdk/go"
+	"github.com/nathfavour/auracrab/pkg/core"
+	"github.com/nathfavour/auracrab/pkg/security"
+	"github.com/nathfavour/auracrab/pkg/skills"
 )
 
 type Agent struct {
@@ -30,10 +30,10 @@ func (a *Agent) Start(ctx context.Context) error {
 	}
 
 	startTaskTool := sdk.DefineTool("start_task", "Start a persistent autonomous task in Auracrab",
-func(params struct {
-Task string `json:"task" jsonschema:"Description of the task to perform"`
-}, inv sdk.ToolInvocation) (any, error) {
-butler := core.GetButler()
+		func(params struct {
+			Task string `json:"task" jsonschema:"Description of the task to perform"`
+		}, inv sdk.ToolInvocation) (any, error) {
+			butler := core.GetButler()
 			task, err := butler.StartTask(context.Background(), params.Task)
 			if err != nil {
 				return nil, err
@@ -42,8 +42,8 @@ butler := core.GetButler()
 		})
 
 	auditTool := sdk.DefineTool("run_security_audit", "Run a deep security audit on the local system",
-func(params struct{}, inv sdk.ToolInvocation) (any, error) {
-report, err := security.RunAudit()
+		func(params struct{}, inv sdk.ToolInvocation) (any, error) {
+			report, err := security.RunAudit()
 			if err != nil {
 				return nil, err
 			}
@@ -51,8 +51,8 @@ report, err := security.RunAudit()
 		})
 
 	statusTool := sdk.DefineTool("check_butler_status", "Check the current status and health of the Auracrab Butler",
-func(params struct{}, inv sdk.ToolInvocation) (any, error) {
-butler := core.GetButler()
+		func(params struct{}, inv sdk.ToolInvocation) (any, error) {
+			butler := core.GetButler()
 			return butler.GetStatus(), nil
 		})
 
@@ -61,9 +61,9 @@ butler := core.GetButler()
 		skill := s
 		var manifestMap map[string]interface{}
 		_ = json.Unmarshal(skill.Manifest(), &manifestMap)
-		
+
 		agentTools = append(agentTools, sdk.Tool{
-Name:        skill.Name(),
+			Name:        skill.Name(),
 			Description: skill.Description(),
 			Parameters:  manifestMap["parameters"].(map[string]interface{}),
 			Handler: func(inv sdk.ToolInvocation) (sdk.ToolResult, error) {
@@ -89,12 +89,12 @@ Name:        skill.Name(),
 	}
 
 	log.Println("Auracrab Copilot Agent session created.")
-	
+
 	session.On(func(event sdk.SessionEvent) {
-if event.Type == sdk.SessionIdle {
-// Keep alive if needed
-}
-})
+		if event.Type == sdk.SessionIdle {
+			// Keep alive if needed
+		}
+	})
 
 	return nil
 }

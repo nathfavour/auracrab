@@ -1,14 +1,14 @@
 package connect
 
 import (
-"context"
-"encoding/json"
-"fmt"
-"log"
-"os"
-"path/filepath"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 
-tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // TelegramChannel is a real Telegram integration using long-polling.
@@ -75,7 +75,7 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 				// Send reply
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, reply)
 				msg.ReplyToMessageID = update.Message.MessageID
-				
+
 				if _, err := bot.Send(msg); err != nil {
 					log.Printf("Error sending telegram message: %v", err)
 				}

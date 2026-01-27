@@ -1,19 +1,19 @@
 package security
 
 import (
-"fmt"
-"os"
-"os/user"
-"path/filepath"
-"runtime"
+	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
+	"runtime"
 )
 
 type Severity string
 
 const (
-SeverityInfo     Severity = "info"
-SeverityWarn     Severity = "warn"
-SeverityCritical Severity = "critical"
+	SeverityInfo     Severity = "info"
+	SeverityWarn     Severity = "warn"
+	SeverityCritical Severity = "critical"
 )
 
 type Finding struct {
@@ -66,18 +66,18 @@ func auditFilesystem(report *AuditReport) error {
 		mode := info.Mode()
 		if mode&0002 != 0 {
 			report.Findings = append(report.Findings, Finding{
-ID:          "fs.world_writable",
-Title:       "Sensitive Directory is World-Writable",
-Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),
+				ID:          "fs.world_writable",
+				Title:       "Sensitive Directory is World-Writable",
+				Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),
 				Severity:    SeverityCritical,
 				Remediation: fmt.Sprintf("chmod 700 %s", target),
 			})
 		}
 		if mode&0020 != 0 {
 			report.Findings = append(report.Findings, Finding{
-ID:          "fs.group_writable",
-Title:       "Sensitive Directory is Group-Writable",
-Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),
+				ID:          "fs.group_writable",
+				Title:       "Sensitive Directory is Group-Writable",
+				Description: fmt.Sprintf("%s has permissions %o", target, mode.Perm()),
 				Severity:    SeverityWarn,
 				Remediation: fmt.Sprintf("chmod 700 %s", target),
 			})
@@ -91,12 +91,12 @@ func auditEnvironment(report *AuditReport) {
 		currUser, err := user.Current()
 		if err == nil && currUser.Uid == "0" {
 			report.Findings = append(report.Findings, Finding{
-ID:          "env.root",
-Title:       "Running as Root",
-Description: "Auracrab is running as root. This increases the blast radius.",
-Severity:    SeverityWarn,
-Remediation: "Run as a non-privileged user.",
-})
+				ID:          "env.root",
+				Title:       "Running as Root",
+				Description: "Auracrab is running as root. This increases the blast radius.",
+				Severity:    SeverityWarn,
+				Remediation: "Run as a non-privileged user.",
+			})
 		}
 	}
 
@@ -104,12 +104,12 @@ Remediation: "Run as a non-privileged user.",
 	for _, key := range sensitiveKeys {
 		if val := os.Getenv(key); val != "" {
 			report.Findings = append(report.Findings, Finding{
-ID:          "env.sensitive_var",
-Title:       fmt.Sprintf("Sensitive Env Var: %s", key),
-Description: fmt.Sprintf("%s is set in the environment.", key),
-Severity:    SeverityInfo,
-Remediation: "Consider using a secure vault.",
-})
+				ID:          "env.sensitive_var",
+				Title:       fmt.Sprintf("Sensitive Env Var: %s", key),
+				Description: fmt.Sprintf("%s is set in the environment.", key),
+				Severity:    SeverityInfo,
+				Remediation: "Consider using a secure vault.",
+			})
 		}
 	}
 }

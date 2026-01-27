@@ -63,7 +63,7 @@ var vibeManifestCmd = &cobra.Command{
 		for _, s := range skills.GetRegistry() {
 			var manifestMap map[string]interface{}
 			_ = json.Unmarshal(s.Manifest(), &manifestMap)
-			
+
 			toolSet = append(toolSet, map[string]interface{}{
 				"name":        s.Name(),
 				"description": s.Description(),
@@ -95,10 +95,10 @@ var executeCmd = &cobra.Command{
 			fmt.Println("Tool name required")
 			os.Exit(1)
 		}
-		
+
 		toolName := args[0]
 		butler := core.GetButler()
-		
+
 		// Try dynamic skills first
 		if s, ok := skills.GetRegistry()[toolName]; ok {
 			var argData json.RawMessage
@@ -125,7 +125,7 @@ var executeCmd = &cobra.Command{
 			if len(args) > 1 {
 				_ = json.Unmarshal([]byte(args[1]), &params)
 			}
-			
+
 			task, err := butler.StartTask(cmd.Context(), params.Task)
 			if err != nil {
 				fmt.Printf(`{"content": "Error: %v", "status": "error"}`+"\n", err)

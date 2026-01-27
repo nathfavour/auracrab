@@ -1,11 +1,11 @@
 package cli
 
 import (
-"fmt"
-"os"
+	"fmt"
+	"os"
 
-"github.com/nathfavour/auracrab/internal/copilot"
-"github.com/spf13/cobra"
+	"github.com/nathfavour/auracrab/internal/copilot"
+	"github.com/spf13/cobra"
 )
 
 var copilotCmd = &cobra.Command{
@@ -18,7 +18,7 @@ var copilotCmd = &cobra.Command{
 			fmt.Printf("Failed to start agent: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		// Wait for context cancellation or keep alive
 		<-cmd.Context().Done()
 	},

@@ -1,16 +1,16 @@
 package cli
 
 import (
-"encoding/json"
-"fmt"
-"os"
+	"encoding/json"
+	"fmt"
+	"os"
 
-"github.com/nathfavour/auracrab/pkg/security"
-"github.com/spf13/cobra"
+	"github.com/nathfavour/auracrab/pkg/security"
+	"github.com/spf13/cobra"
 )
 
 var (
-auditFormat string
+	auditFormat string
 )
 
 var auditCmd = &cobra.Command{

@@ -45,7 +45,7 @@ func (s *SystemSkill) Execute(ctx context.Context, args json.RawMessage) (string
 	hostname, _ := os.Hostname()
 	uptime := time.Since(time.Now().Add(-time.Second * 3600)) // placeholder, real uptime would require more logic
 
-	res := fmt.Sprintf("System Audit:\nHost: %s\nOS: %s\nArch: %s\nCPUs: %d\nGo: %s\n", 
+	res := fmt.Sprintf("System Audit:\nHost: %s\nOS: %s\nArch: %s\nCPUs: %d\nGo: %s\n",
 		hostname, runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.Version())
 
 	if params.Detail == "full" {

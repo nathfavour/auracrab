@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/nathfavour/auracrab/pkg/connect"
-	"github.com/nathfavour/auracrab/pkg/crabs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nathfavour/auracrab/pkg/connect"
+	"github.com/nathfavour/auracrab/pkg/crabs"
 )
 
 type TaskStatus string
@@ -183,7 +184,7 @@ func (b *Butler) updateStatus(id string, status TaskStatus, result string) {
 func (b *Butler) GetStatus() string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	running := 0
 	completed := 0
 	for _, t := range b.tasks {
@@ -193,7 +194,7 @@ func (b *Butler) GetStatus() string {
 			completed++
 		}
 	}
-	
+
 	if running > 0 {
 		return fmt.Sprintf("Auracrab Butler: 🚀 %d tasks running, ✅ %d completed.", running, completed)
 	}
@@ -203,7 +204,7 @@ func (b *Butler) GetStatus() string {
 func (b *Butler) WatchHealth() string {
 	home, _ := os.UserHomeDir()
 	logPath := filepath.Join(home, ".vibeauracle", "vibeauracle.log")
-	
+
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		return fmt.Sprintf("Unable to read vibeauracle logs: %v", err)
@@ -216,24 +217,24 @@ func (b *Butler) WatchHealth() string {
 	if start < 0 {
 		start = 0
 	}
-	
+
 	for _, line := range lines[start:] {
 		if strings.Contains(line, `"type":"error"`) || strings.Contains(line, `"type":"panic"`) {
 			errors = append(errors, line)
 		}
 	}
-	
+
 	if len(errors) == 0 {
 		return "System Health: All systems normal in vibeauracle."
 	}
-	
+
 	return fmt.Sprintf("System Health: Detected %d issues recently. Suggestions: Check logs or run 'vibeaura doctor'.", len(errors))
 }
 
 func (b *Butler) ListTasks() []*Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	var tasks []*Task
 	for _, t := range b.tasks {
 		tasks = append(tasks, t)

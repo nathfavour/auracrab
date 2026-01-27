@@ -1,11 +1,11 @@
 package crabs
 
 import (
-"encoding/json"
-"fmt"
-"os"
-"path/filepath"
-"sync"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
 )
 
 // Crab represents a user-defined specialized agent.
