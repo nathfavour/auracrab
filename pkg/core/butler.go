@@ -14,6 +14,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/connect"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/crabs"
+	"github.com/nathfavour/auracrab/pkg/cron"
 )
 
 type TaskStatus string
@@ -35,11 +36,12 @@ type Task struct {
 }
 
 type Butler struct {
-	tasks    map[string]*Task
-	mu       sync.RWMutex
-	stateDir string
-	running  bool
-	registry *crabs.Registry
+	tasks     map[string]*Task
+	mu        sync.RWMutex
+	stateDir  string
+	running   bool
+	registry  *crabs.Registry
+	scheduler *cron.Scheduler
 }
 
 var (
@@ -53,11 +55,13 @@ func GetButler() *Butler {
 
 		reg, _ := crabs.NewRegistry()
 		instance = &Butler{
-			tasks:    make(map[string]*Task),
-			stateDir: stateDir,
-			registry: reg,
+			tasks:     make(map[string]*Task),
+			stateDir:  stateDir,
+			registry:  reg,
+			scheduler: cron.NewScheduler(),
 		}
 		instance.load()
+		instance.setupCron()
 	})
 	return instance
 }
@@ -84,11 +88,21 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Initial health check
 	fmt.Println(b.WatchHealth())
 
+	// Start scheduler
+	go b.scheduler.Start(ctx)
+
 	<-ctx.Done()
 	b.mu.Lock()
 	b.running = false
 	b.mu.Unlock()
 	return nil
+}
+
+func (b *Butler) setupCron() {
+	// Example: Run a system security audit every 24 hours
+	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
+		_, _ = b.StartTask(ctx, "run security audit and log results")
+	})
 }
 
 func (b *Butler) handleChannelMessage(from string, text string) string {
