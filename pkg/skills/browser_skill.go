@@ -1,12 +1,13 @@
 package skills
 
 import (
-"context"
-"fmt"
-"io"
-"net/http"
-"os/exec"
-"runtime"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os/exec"
+	"runtime"
 )
 
 type BrowserSkill struct{}
@@ -19,22 +20,40 @@ func (s *BrowserSkill) Description() string {
 	return "Open websites and scrape content"
 }
 
-func (s *BrowserSkill) Execute(ctx context.Context, action string, args map[string]interface{}) (string, error) {
-	switch action {
+func (s *BrowserSkill) Manifest() []byte {
+	return []byte(`{
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"action": {
+					"type": "string",
+					"enum": ["open", "scrape"]
+				},
+				"url": {
+					"type": "string"
+				}
+			},
+			"required": ["action", "url"]
+		}
+	}`)
+}
+
+func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	var params struct {
+		Action string `json:"action"`
+		URL    string `json:"url"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", err
+	}
+
+	switch params.Action {
 	case "open":
-		url, ok := args["url"].(string)
-		if !ok {
-			return "", fmt.Errorf("missing url")
-		}
-		return s.open(url)
+		return s.open(params.URL)
 	case "scrape":
-		url, ok := args["url"].(string)
-		if !ok {
-			return "", fmt.Errorf("missing url")
-		}
-		return s.scrape(url)
+		return s.scrape(params.URL)
 	default:
-		return "", fmt.Errorf("unknown action: %s", action)
+		return "", fmt.Errorf("unknown action: %s", params.Action)
 	}
 }
 
@@ -69,14 +88,16 @@ func (s *BrowserSkill) scrape(url string) (string, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return bodyText(body), nil // Return what we got
 	}
 
-	// Basic truncation for now
+	return bodyText(body), nil
+}
+
+func bodyText(body []byte) string {
 	content := string(body)
 	if len(content) > 5000 {
 		content = content[:5000] + "... [truncated]"
 	}
-
-	return content, nil
+	return content
 }

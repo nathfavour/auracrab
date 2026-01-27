@@ -1,9 +1,10 @@
 package skills
 
 import (
-"context"
-"fmt"
-"os/exec"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
 )
 
 type AutoCommitSkill struct{}
@@ -13,11 +14,19 @@ func (s *AutoCommitSkill) Name() string {
 }
 
 func (s *AutoCommitSkill) Description() string {
-	return "Automatically stages and commits changes with AI-generated messages via autocommiter.go"
+	return "Automatically stages and commits changes with AI-generated messages"
 }
 
-func (s *AutoCommitSkill) Execute(ctx context.Context, action string, args map[string]interface{}) (string, error) {
-	// Action is ignored for now as autocommit is one task
+func (s *AutoCommitSkill) Manifest() []byte {
+	return []byte(`{
+		"parameters": {
+			"type": "object",
+			"properties": {}
+		}
+	}`)
+}
+
+func (s *AutoCommitSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	cmd := exec.CommandContext(ctx, "autocommiter", "-y")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

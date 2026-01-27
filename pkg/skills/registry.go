@@ -1,9 +1,9 @@
 package skills
 
 import (
-"context"
-"fmt"
-"sync"
+	"context"
+	"encoding/json"
+	"sync"
 )
 
 // Skill interface defines what a skill can do.

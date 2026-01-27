@@ -60,7 +60,7 @@ var vibeManifestCmd = &cobra.Command{
 		}
 
 		// Add dynamic skills
-		for _, s := range skills.GetRegistry() {
+		for _, s := range skills.GetRegistry().List() {
 			var manifestMap map[string]interface{}
 			_ = json.Unmarshal(s.Manifest(), &manifestMap)
 
@@ -100,7 +100,7 @@ var executeCmd = &cobra.Command{
 		butler := core.GetButler()
 
 		// Try dynamic skills first
-		if s, ok := skills.GetRegistry()[toolName]; ok {
+		if s, ok := skills.GetRegistry().Get(toolName); ok {
 			var argData json.RawMessage
 			if len(args) > 1 {
 				argData = json.RawMessage(args[1])

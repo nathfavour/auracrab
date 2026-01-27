@@ -1,10 +1,11 @@
 package skills
 
 import (
-"context"
-"fmt"
+	"context"
+	"encoding/json"
+	"fmt"
 
-"github.com/nathfavour/auracrab/pkg/social"
+	"github.com/nathfavour/auracrab/pkg/social"
 )
 
 type SocialSkill struct {
@@ -22,31 +23,38 @@ func (s *SocialSkill) Name() string {
 }
 
 func (s *SocialSkill) Description() string {
-	return "Automate social media posts across X, LinkedIn, Facebook, Instagram, and Threads"
+	return "Automate social media posts across platforms"
 }
 
-func (s *SocialSkill) Execute(ctx context.Context, action string, args map[string]interface{}) (string, error) {
-	switch action {
+func (s *SocialSkill) Manifest() []byte {
+	return []byte(`{
+		"parameters": {
+			"type": "object",
+			"properties": {
+				"action": { "type": "string", "enum": ["post"] },
+				"content": { "type": "string" },
+				"platforms": { "type": "array", "items": { "type": "string" } }
+			},
+			"required": ["action", "content"]
+		}
+	}`)
+}
+
+func (s *SocialSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	var params struct {
+		Action    string   `json:"action"`
+		Content   string   `json:"content"`
+		Platforms []string `json:"platforms"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return "", err
+	}
+
+	switch params.Action {
 	case "post":
-		platforms, ok := args["platforms"].([]interface{})
-		if !ok {
-			return "", fmt.Errorf("missing platforms (list of strings)")
-		}
-		content, ok := args["content"].(string)
-		if !ok {
-			return "", fmt.Errorf("missing content")
-		}
-
-		var platformStrings []string
-		for _, p := range platforms {
-			if ps, ok := p.(string); ok {
-				platformStrings = append(platformStrings, ps)
-			}
-		}
-
-		results := s.manager.PostToAll(ctx, content, platformStrings)
+		results := s.manager.PostToAll(ctx, params.Content, params.Platforms)
 		return results, nil
 	default:
-		return "", fmt.Errorf("unknown social action: %s", action)
+		return "", fmt.Errorf("unknown social action: %s", params.Action)
 	}
 }
