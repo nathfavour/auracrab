@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build binaries
+        run: |
+          set -e
+          mkdir -p dist
+          
+          platforms=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+            "windows/arm64"
+            "android/arm64"
+          )
+
+          # Determine semantic version/tag
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ "${{ github.ref_name }}" == "master" ]]; then
+            VERSION="latest"
+          else
+            VERSION="dev"
+          fi
+
+          COMMIT=${{ github.sha }}
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          for platform in "${platforms[@]}"; do
+            platform_split=(${platform//\// })
+            GOOS=${platform_split[0]}
+            GOARCH=${platform_split[1]}
+            
+            output_name="auracrab-${GOOS}-${GOARCH}"
+            if [ "$GOOS" == "windows" ]; then
+              output_name+=".exe"
+            fi
+
+            echo "Building for $GOOS/$GOARCH (version $VERSION, commit $COMMIT, date $BUILD_DATE)..."
+            # Adjust the main package path if needed. For auracrab it's ./cmd/auracrab
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X github.com/nathfavour/auracrab/internal/cli.Version=$VERSION -X github.com/nathfavour/auracrab/internal/cli.Commit=$COMMIT -X github.com/nathfavour/auracrab/internal/cli.BuildDate=$BUILD_DATE" -trimpath -o "dist/$output_name" ./cmd/auracrab
+          done
+
+          # Generate metadata.json
+          echo "{\"version\": \"$VERSION\", \"commit\": \"$COMMIT\", \"date\": \"$BUILD_DATE\"}" > dist/metadata.json
+
+      - name: Update rolling tags
+        if: github.ref == 'refs/heads/master'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME='latest'
+          echo "Updating rolling tag: $TAG_NAME to ${{ github.sha }}"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git tag -f "$TAG_NAME" ${{ github.sha }}
+          git push -f origin "$TAG_NAME"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'
+        with:
+          files: dist/*
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || 'Latest Stable' }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ github.ref_type != 'tag' }}
+          make_latest: ${{ github.ref_type == 'tag' || github.ref_name == 'master' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
