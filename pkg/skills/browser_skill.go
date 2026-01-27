@@ -1,82 +1,82 @@
 package skills
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"os/exec"
+"context"
+"fmt"
+"io"
+"net/http"
+"os/exec"
+"runtime"
 )
 
 type BrowserSkill struct{}
 
 func (s *BrowserSkill) Name() string {
-	return "browser_action"
+	return "browser"
 }
 
 func (s *BrowserSkill) Description() string {
-	return "Open a URL or perform web automation using the system browser."
+	return "Open websites and scrape content"
 }
 
-func (s *BrowserSkill) Manifest() json.RawMessage {
-	return json.RawMessage(`{
-		"name": "browser_action",
-		"description": "Open a URL or perform web automation using the system browser.",
-		"parameters": {
-			"type": "object",
-			"properties": {
-				"url": {
-					"type": "string",
-					"description": "The URL to visit"
-				},
-				"action": {
-					"type": "string",
-					"enum": ["open", "screenshot", "scrape"],
-					"description": "Action to perform"
-				}
-			},
-			"required": ["url", "action"]
+func (s *BrowserSkill) Execute(ctx context.Context, action string, args map[string]interface{}) (string, error) {
+	switch action {
+	case "open":
+		url, ok := args["url"].(string)
+		if !ok {
+			return "", fmt.Errorf("missing url")
 		}
-	}`)
+		return s.open(url)
+	case "scrape":
+		url, ok := args["url"].(string)
+		if !ok {
+			return "", fmt.Errorf("missing url")
+		}
+		return s.scrape(url)
+	default:
+		return "", fmt.Errorf("unknown action: %s", action)
+	}
 }
 
-func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
-	var params struct {
-		URL    string `json:"url"`
-		Action string `json:"action"`
+func (s *BrowserSkill) open(url string) (string, error) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return "", fmt.Errorf("unsupported platform")
 	}
-	if err := json.Unmarshal(args, &params); err != nil {
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Opened %s", url), nil
+}
+
+func (s *BrowserSkill) scrape(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch URL: %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return "", err
 	}
 
-	// For now, implement 'open' as a simple platform-specific command
-	// and 'scrape' using curl/lynx. PARITY with moltbot's Playwright will be 
-	// handled by a future specialized crab using these primitives.
-	switch params.Action {
-	case "open":
-		// Simple xdg-open on Linux
-		cmd := exec.Command("xdg-open", params.URL)
-		err := cmd.Start()
-		if err != nil {
-			return "", fmt.Errorf("failed to open browser: %v", err)
-		}
-		return fmt.Sprintf("Opened %s in system browser.", params.URL), nil
-	case "scrape":
-		cmd := exec.Command("curl", "-sL", params.URL)
-		out, err := cmd.Output()
-		if err != nil {
-			return "", fmt.Errorf("scrape failed: %v", err)
-		}
-		// Return snippet
-		res := string(out)
-		if len(res) > 2000 {
-			res = res[:2000] + "... [truncated]"
-		}
-		return res, nil
-	default:
-		return "", fmt.Errorf("action %s not implemented natively yet", params.Action)
+	// Basic truncation for now
+	content := string(body)
+	if len(content) > 5000 {
+		content = content[:5000] + "... [truncated]"
 	}
-}
 
-func init() {
-	Register(&BrowserSkill{})
+	return content, nil
 }
