@@ -1,13 +1,23 @@
 package tui
 
 import (
-"fmt"
-"strings"
-"time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
 
-tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 	"github.com/nathfavour/auracrab/pkg/core"
+	"github.com/nathfavour/auracrab/pkg/skills"
 )
 var (
 // Colors
