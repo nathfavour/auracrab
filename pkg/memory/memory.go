@@ -1,60 +1,73 @@
 package memory
-package memory
 
+import (
+"encoding/json"
+"os"
+"path/filepath"
+"sync"
 
+"github.com/nathfavour/auracrab/pkg/config"
+)
 
+// Store is a simple persistent key-value store.
+type Store struct {
+	data map[string]interface{}
+	path string
+	mu   sync.RWMutex
+}
 
+func NewStore(name string) (*Store, error) {
+	dir := filepath.Join(config.DataDir(), "memory")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
 
+	path := filepath.Join(dir, name+".json")
+	s := &Store{
+		data: make(map[string]interface{}),
+		path: path,
+	}
 
+	if err := s.load(); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
 
+	return s, nil
+}
 
+func (s *Store) Set(key string, value interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = value
+	return s.save()
+}
 
+func (s *Store) Get(key string) (interface{}, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, ok := s.data[key]
+	return val, ok
+}
 
+func (s *Store) Delete(key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.data, key)
+	return s.save()
+}
 
+func (s *Store) load() error {
+	f, err := os.ReadFile(s.path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(f, &s.data)
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}	_ = os.WriteFile(m.path, data, 0644)	data, _ := json.MarshalIndent(m.Store, "", "  ")func (m *Memory) save() {}	_ = json.Unmarshal(data, &m.Store)	}		return	if err != nil {	data, err := os.ReadFile(m.path)func (m *Memory) load() {}	return val, ok	val, ok := m.Store[key]	defer m.mu.RUnlock()	m.mu.RLock()func (m *Memory) Get(key string) (string, bool) {}	m.save()	m.Store[key] = value	defer m.mu.Unlock()	m.mu.Lock()func (m *Memory) Set(key, value string) {}	return instance	})		instance.load()		}			path:  config.DataDir() + "/memory.json",			Store: make(map[string]string),		instance = &Memory{	once.Do(func() {func GetMemory() *Memory {)	once     sync.Once	instance *Memoryvar (}	mu    sync.RWMutex	path  string	Store map[string]string `json:"store"`type Memory struct {)	"github.com/nathfavour/auracrab/pkg/config"	"sync"	"os"	"encoding/json"import (
+func (s *Store) save() error {
+	data, err := json.MarshalIndent(s.data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.path, data, 0644)
+}
