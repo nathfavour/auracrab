@@ -460,10 +460,130 @@ func convertAnsiToSVG(ansi string) string {
 	return sb.String()
 }
 
+func sanitizeANSI(line string, reCSI, reOSC *regexp.Regexp) string {
+	// Strip OSC sequences entirely (titles, hyperlinks, etc).
+	line = reOSC.ReplaceAllString(line, "")
+	// Strip CSI sequences unless they are SGR (ending with 'm').
+	return reCSI.ReplaceAllStringFunc(line, func(seq string) string {
+		if strings.HasSuffix(seq, "m") {
+			return seq
+		}
+		return ""
+	})
+}
+
+func visibleTrimmedWidth(line string, reSGR *regexp.Regexp) int {
+	visible := reSGR.ReplaceAllString(line, "")
+	visible = strings.TrimRight(visible, " \t")
+	return runewidth.StringWidth(visible)
+}
+
+func lastNonSpaceRune(s string) (rune, bool) {
+	s = strings.TrimRight(s, " \t")
+	if s == "" {
+		return 0, false
+	}
+	r, _ := utf8.DecodeLastRuneInString(s)
+	return r, true
+}
+
+func isBorderRune(r rune) bool {
+	switch r {
+	case '|',
+		'│', '┃', '║',
+		'┤', '├', '┐', '┘', '┌', '└',
+		'┬', '┴', '┼',
+		'╡', '╢', '╣', '╠', '╞',
+		'╭', '╮', '╯', '╰',
+		'─', '━', '═':
+		return true
+	default:
+		return false
+	}
+}
+
+func detectRightBorderColumn(lines []string, reSGR *regexp.Regexp) int {
+	counts := map[int]int{}
+	for _, l := range lines {
+		visible := reSGR.ReplaceAllString(l, "")
+		visible = strings.TrimRight(visible, " \t")
+		if visible == "" {
+			continue
+		}
+		last, ok := lastNonSpaceRune(visible)
+		if !ok || !isBorderRune(last) {
+			continue
+		}
+		col := runewidth.StringWidth(visible)
+		counts[col]++
+	}
+
+	bestCol := 0
+	bestCount := 0
+	for col, count := range counts {
+		if count > bestCount {
+			bestCol = col
+			bestCount = count
+		}
+	}
+
+	// Heuristic: if many lines share the same ending border column, treat it as a
+	// full-width frame and crop it away.
+	if bestCount >= 3 && bestCount >= len(lines)/3 {
+		return bestCol
+	}
+	return 0
+}
+
+func truncateAnsiLineToWidth(line string, maxCols int, reSGR *regexp.Regexp) string {
+	if maxCols <= 0 || line == "" {
+		return ""
+	}
+
+	indices := reSGR.FindAllStringIndex(line, -1)
+	var b strings.Builder
+	visibleCols := 0
+	lastEnd := 0
+
+	writeText := func(segment string) bool {
+		for _, r := range segment {
+			rw := runewidth.RuneWidth(r)
+			if rw == 0 {
+				rw = 1
+			}
+			if visibleCols+rw > maxCols {
+				return false
+			}
+			b.WriteRune(r)
+			visibleCols += rw
+		}
+		return true
+	}
+
+	for _, idx := range indices {
+		if idx[0] > lastEnd {
+			if !writeText(line[lastEnd:idx[0]]) {
+				return b.String()
+			}
+		}
+		if visibleCols >= maxCols {
+			return b.String()
+		}
+		b.WriteString(line[idx[0]:idx[1]])
+		lastEnd = idx[1]
+	}
+
+	if lastEnd < len(line) {
+		_ = writeText(line[lastEnd:])
+	}
+	return b.String()
+}
+
 func parseAnsiLine(line string, re *regexp.Regexp) []ansiPart {
 	var parts []ansiPart
 	currFg := "#FAFAFA"
 	currBold := false
+
 	indices := re.FindAllStringIndex(line, -1)
 	lastEnd := 0
 
@@ -471,36 +591,67 @@ func parseAnsiLine(line string, re *regexp.Regexp) []ansiPart {
 		if idx[0] > lastEnd {
 			parts = append(parts, ansiPart{text: line[lastEnd:idx[0]], fg: currFg, bold: currBold})
 		}
+
 		code := line[idx[0]:idx[1]]
 		if code == "\x1b[0m" {
 			currFg = "#FAFAFA"
 			currBold = false
-		} else if strings.Contains(code, "38;2;") {
-			clean := strings.Trim(code, "\x1b[m")
-			pts := strings.Split(clean, ";")
-			if len(pts) >= 5 {
-				r, _ := strconv.Atoi(pts[2])
-				g, _ := strconv.Atoi(pts[3])
-				b, _ := strconv.Atoi(pts[4])
-				currFg = fmt.Sprintf("#%02x%02x%02x", r, g, b)
+		} else {
+			// Handle TrueColor: \x1b[38;2;r;g;bm
+			if strings.Contains(code, "38;2;") {
+				clean := strings.Trim(code, "\x1b[m")
+				pts := strings.Split(clean, ";")
+				if len(pts) >= 5 {
+					r, _ := strconv.Atoi(pts[2])
+					g, _ := strconv.Atoi(pts[3])
+					b, _ := strconv.Atoi(pts[4])
+					currFg = fmt.Sprintf("#%02x%02x%02x", r, g, b)
+				}
+			} else if strings.Contains(code, "38;5;") {
+				currFg = "#7D56F4"
+			} else {
+				// Map basic colors only if not TrueColor
+				if strings.Contains(code, "35") {
+					currFg = "#EE6FF8"
+				} else if strings.Contains(code, "36") {
+					currFg = "#04D9FF"
+				} else if strings.Contains(code, "34") {
+					currFg = "#7D56F4"
+				}
 			}
-		} else if strings.Contains(code, "1m") {
-			currBold = true
+
+			if strings.Contains(code, ";1m") || strings.Contains(code, "[1;") || code == "\x1b[1m" {
+				currBold = true
+			}
 		}
 		lastEnd = idx[1]
 	}
+
 	if lastEnd < len(line) {
 		parts = append(parts, ansiPart{text: line[lastEnd:], fg: currFg, bold: currBold})
 	}
+
 	return parts
 }
 
-func convertToPNG(svgPath, pngPath string) error {
+// convertToPNG attempts to convert SVG to PNG using system tools
+func (m Model) convertToPNG(svgPath, pngPath string) error {
+	// Try rsvg-convert (common on Linux)
 	if _, err := exec.LookPath("rsvg-convert"); err == nil {
 		return exec.Command("rsvg-convert", "-o", pngPath, svgPath).Run()
 	}
+
+	// Try ImageMagick
 	if _, err := exec.LookPath("magick"); err == nil {
 		return exec.Command("magick", svgPath, pngPath).Run()
+	} else if _, err := exec.LookPath("convert"); err == nil {
+		return exec.Command("convert", svgPath, pngPath).Run()
 	}
-	return fmt.Errorf("no conversion tool found")
+
+	// Try ffmpeg (common on Termux)
+	if _, err := exec.LookPath("ffmpeg"); err == nil {
+		return exec.Command("ffmpeg", "-i", svgPath, pngPath).Run()
+	}
+
+	return fmt.Errorf("no conversion tool found (rsvg-convert, magick, or ffmpeg)")
 }
