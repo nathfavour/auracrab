@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nathfavour/auracrab/pkg/connect"
+	"github.com/nathfavour/auracrab/pkg/crabs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,6 +37,7 @@ type Butler struct {
 	mu       sync.RWMutex
 	stateDir string
 	running  bool
+	registry *crabs.Registry
 }
 
 var (
@@ -48,9 +51,11 @@ func GetButler() *Butler {
 		stateDir := filepath.Join(home, ".local", "share", "auracrab")
 		_ = os.MkdirAll(stateDir, 0755)
 
+		reg, _ := crabs.NewRegistry()
 		instance = &Butler{
 			tasks:    make(map[string]*Task),
 			stateDir: stateDir,
+			registry: reg,
 		}
 		instance.load()
 	})
@@ -66,6 +71,16 @@ func (b *Butler) Serve(ctx context.Context) error {
 	b.running = true
 	b.mu.Unlock()
 
+	// Start integrations
+	for _, ch := range connect.GetChannels() {
+		go func(c connect.Channel) {
+			err := c.Start(ctx, b.handleChannelMessage)
+			if err != nil {
+				fmt.Printf("Error starting channel %s: %v\n", c.Name(), err)
+			}
+		}(ch)
+	}
+
 	// Initial health check
 	fmt.Println(b.WatchHealth())
 
@@ -74,6 +89,27 @@ func (b *Butler) Serve(ctx context.Context) error {
 	b.running = false
 	b.mu.Unlock()
 	return nil
+}
+
+func (b *Butler) handleChannelMessage(from string, text string) string {
+	// If the text starts with @crab_id, delegate to that specialized agent
+	if strings.HasPrefix(text, "@") {
+		parts := strings.SplitN(text, " ", 2)
+		if len(parts) > 1 {
+			crabID := strings.TrimPrefix(parts[0], "@")
+			if c, err := b.registry.Get(crabID); err == nil {
+				// Delegate to crab
+				return fmt.Sprintf("Delegating to specialized agent '%s': %s", c.Name, parts[1])
+			}
+		}
+	}
+
+	// Default behavior: Start a task
+	task, err := b.StartTask(context.Background(), text)
+	if err != nil {
+		return fmt.Sprintf("Error starting task: %v", err)
+	}
+	return fmt.Sprintf("Task '%s' started with ID %s", text, task.ID)
 }
 
 func (b *Butler) load() {

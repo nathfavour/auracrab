@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/nathfavour/auracrab/pkg/core"
+	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/skills"
 	"github.com/spf13/cobra"
 )
@@ -40,6 +41,21 @@ var vibeManifestCmd = &cobra.Command{
 				"name":        "auracrab_watch_health",
 				"description": "Watch vibeauracle health logs and report issues",
 				"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+			{
+				"name":        "auracrab_register_crab",
+				"description": "Register a new user-defined Crab agent",
+				"inputSchema": json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"id": {"type": "string"},
+						"name": {"type": "string"},
+						"description": {"type": "string"},
+						"instructions": {"type": "string"},
+						"skills": {"type": "array", "items": {"type": "string"}}
+					},
+					"required": ["id", "name", "instructions"]
+				}`),
 			},
 		}
 
@@ -123,6 +139,24 @@ var executeCmd = &cobra.Command{
 		case "auracrab_watch_health":
 			health := butler.WatchHealth()
 			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", health)
+		case "auracrab_register_crab":
+			var crab crabs.Crab
+			if len(args) > 1 {
+				if err := json.Unmarshal([]byte(args[1]), &crab); err != nil {
+					fmt.Printf(`{"content": "Error parsing crab: %v", "status": "error"}`+"\n", err)
+					return
+				}
+			}
+			reg, err := crabs.NewRegistry()
+			if err != nil {
+				fmt.Printf(`{"content": "Error accessing registry: %v", "status": "error"}`+"\n", err)
+				return
+			}
+			if err := reg.Register(crab); err != nil {
+				fmt.Printf(`{"content": "Error registering crab: %v", "status": "error"}`+"\n", err)
+				return
+			}
+			fmt.Printf(`{"content": "Crab '%s' registered successfully.", "status": "success"}`+"\n", crab.Name)
 		default:
 			fmt.Printf("Unknown tool: %s\n", toolName)
 			os.Exit(1)
