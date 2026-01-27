@@ -8,12 +8,18 @@ import (
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	cfgFile string
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "auracrab",
 	Short: "auracrab is a modular CLI tool",
 	Long:  `A highly modular CLI project structure built with Go and Cobra.`,
+	Version: fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, BuildDate),
 }
 
 func Execute() {

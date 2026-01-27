@@ -14,6 +14,6 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of auracrab",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("auracrab v0.0.1")
+		fmt.Printf("auracrab %s\n", Version)
 	},
 }
