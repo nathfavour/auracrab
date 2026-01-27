@@ -34,3 +34,16 @@ func CrabsDir() string {
 	_ = os.MkdirAll(path, 0755)
 	return path
 }
+
+// ScreenshotDir returns the path to the screenshots directory in system downloads
+func ScreenshotDir() string {
+	home, _ := os.UserHomeDir()
+	var defaultShotDir string
+	if _, err := os.Stat("/data/data/com.termux/files/usr/bin/bash"); err == nil {
+		defaultShotDir = filepath.Join(home, "downloads", "auracrab")
+	} else {
+		defaultShotDir = filepath.Join(home, "Downloads", "auracrab")
+	}
+	_ = os.MkdirAll(defaultShotDir, 0755)
+	return defaultShotDir
+}
