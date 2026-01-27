@@ -1,11 +1,11 @@
 package skills
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
+"context"
+"encoding/json"
+"fmt"
 
-	"github.com/nathfavour/auracrab/pkg/social"
+"github.com/nathfavour/auracrab/pkg/social"
 )
 
 type SocialSkill struct {
@@ -29,7 +29,7 @@ func (s *SocialSkill) Description() string {
 	return "Post content to social media platforms (X, LinkedIn, Facebook, Instagram, Threads)."
 }
 
-func (s *SocialSkill) Manifest() []byte {
+func (s *SocialSkill) Manifest() json.RawMessage {
 	manifest := map[string]interface{}{
 		"name":        s.Name(),
 		"description": s.Description(),
@@ -50,7 +50,7 @@ func (s *SocialSkill) Manifest() []byte {
 		},
 	}
 	data, _ := json.Marshal(manifest)
-	return data
+	return json.RawMessage(data)
 }
 
 func (s *SocialSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
