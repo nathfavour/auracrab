@@ -2,38 +2,57 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nathfavour/auracrab/pkg/core"
 )
 
-var style = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("#FAFAFA")).
-	Background(lipgloss.Color("#7D56F4")).
-	PaddingTop(2).
-	PaddingLeft(4).
-	Width(40)
+var (
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("#7D56F4")).
+			Padding(0, 1)
+
+	statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#626262"))
+
+	taskStyle = lipgloss.NewStyle().
+			PaddingLeft(2)
+)
+
+type tickMsg time.Time
 
 type Model struct {
-	choices  []string
-	cursor   int
-	selected map[int]struct{}
+	tasks     []*core.Task
+	cursor    int
+	statusMsg string
 }
 
 func InitialModel() Model {
 	return Model{
-		choices:  []string{"Option 1", "Option 2", "Option 3"},
-		selected: make(map[int]struct{}),
+		tasks: core.GetButler().ListTasks(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tick()
+}
+
+func tick() tea.Cmd {
+	return tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		m.tasks = core.GetButler().ListTasks()
+		m.statusMsg = core.GetButler().GetStatus()
+		return m, tick()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -43,39 +62,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
+			if m.cursor < len(m.tasks)-1 {
 				m.cursor++
 			}
-		case "enter", " ":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
+		case "r":
+			m.tasks = core.GetButler().ListTasks()
 		}
 	}
 	return m, nil
 }
 
 func (m Model) View() string {
-	s := style.Render("Welcome to Auracrab!") + "\n\n"
+	s := titleStyle.Render("🦀 AURACRAB  - TUI") + "\n\n"
+	s += statusStyle.Render(m.statusMsg) + "\n\n"
 
-	for i, choice := range m.choices {
+	s += "Managed Tasks:\n"
+	if len(m.tasks) == 0 {
+		s += "  (no tasks yet)\n"
+	}
+
+	for i, task := range m.tasks {
 		cursor := " "
 		if m.cursor == i {
 			cursor = ">"
 		}
 
-		checked := " "
-		if _, ok := m.selected[i]; ok {
-			checked = "x"
+		statusIcon := "⏳"
+		if task.Status == core.TaskStatusCompleted {
+			statusIcon = "✅"
+		} else if task.Status == core.TaskStatusFailed {
+			statusIcon = "❌"
 		}
 
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+		s += fmt.Sprintf("%s %s %s - %s\n", cursor, statusIcon, task.ID, task.Content)
 	}
 
-	s += "\nPress q to quit.\n"
+	s += "\n[q]uit [r]efresh\n"
 
 	return s
 }

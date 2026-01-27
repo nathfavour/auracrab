@@ -34,6 +34,7 @@ type Butler struct {
 	tasks    map[string]*Task
 	mu       sync.RWMutex
 	stateDir string
+	running  bool
 }
 
 var (
@@ -54,6 +55,25 @@ func GetButler() *Butler {
 		instance.load()
 	})
 	return instance
+}
+
+func (b *Butler) Serve(ctx context.Context) error {
+	b.mu.Lock()
+	if b.running {
+		b.mu.Unlock()
+		return fmt.Errorf("butler is already running")
+	}
+	b.running = true
+	b.mu.Unlock()
+
+	// Initial health check
+	fmt.Println(b.WatchHealth())
+
+	<-ctx.Done()
+	b.mu.Lock()
+	b.running = false
+	b.mu.Unlock()
+	return nil
 }
 
 func (b *Butler) load() {
