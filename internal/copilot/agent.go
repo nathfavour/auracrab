@@ -90,7 +90,6 @@ Name:        skill.Name(),
 
 	log.Println("Auracrab Copilot Agent session created.")
 	
-	done := make(chan bool)
 	session.On(func(event sdk.SessionEvent) {
 if event.Type == sdk.SessionIdle {
 // Keep alive if needed

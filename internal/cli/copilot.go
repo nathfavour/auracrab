@@ -1,31 +1,29 @@
 package cli
-package cli
 
 import (
+"fmt"
+"os"
 
+"github.com/nathfavour/auracrab/internal/copilot"
+"github.com/spf13/cobra"
+)
 
+var copilotCmd = &cobra.Command{
+	Use:   "copilot",
+	Short: "Start Auracrab as a Copilot SDK agent",
+	Run: func(cmd *cobra.Command, args []string) {
+		agent := copilot.NewAgent()
+		fmt.Println("Starting Copilot SDK agent...")
+		if err := agent.Start(cmd.Context()); err != nil {
+			fmt.Printf("Failed to start agent: %v\n", err)
+			os.Exit(1)
+		}
+		
+		// Wait for context cancellation or keep alive
+		<-cmd.Context().Done()
+	},
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}	rootCmd.AddCommand(copilotCmd)func init() {}	},		<-cmd.Context().Done()		// Wait for context cancellation or keep alive				}			os.Exit(1)			fmt.Printf("Failed to start agent: %v\n", err)		if err := agent.Start(cmd.Context()); err != nil {		fmt.Println("Starting Copilot SDK agent...")		agent := copilot.NewAgent()	Run: func(cmd *cobra.Command, args []string) {	Short: "Start Auracrab as a Copilot SDK agent",	Use:   "copilot",var copilotCmd = &cobra.Command{)	"github.com/spf13/cobra"	"github.com/nathfavour/auracrab/internal/copilot"	"os"	"fmt"
+func init() {
+	rootCmd.AddCommand(copilotCmd)
+}

@@ -44,13 +44,6 @@ func (s *AutoCommitSkill) Execute(ctx context.Context, args json.RawMessage) (st
 	}
 	_ = json.Unmarshal(args, &params)
 
-	cmdArgs := []string{}
-	if params.DryRun {
-		// assuming autocommiter might have a way to just show message, 
-		// but for now we'll just use the default execution logic
-		// and maybe add a flag if supported.
-	}
-
 	cmd := exec.Command("autocommiter")
 	if params.Path != "" {
 		cmd.Dir = params.Path
