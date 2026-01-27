@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/nathfavour/auracrab/pkg/core"
+	"github.com/nathfavour/auracrab/pkg/skills"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +20,41 @@ var vibeManifestCmd = &cobra.Command{
 	Use:   "vibe-manifest",
 	Short: "Output vibe manifest for vibeauracle",
 	Run: func(cmd *cobra.Command, args []string) {
+		toolSet := []map[string]interface{}{
+			{
+				"name":        "auracrab_status",
+				"description": "Get the current status of the Auracrab daemon",
+				"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+			{
+				"name":        "auracrab_start_task",
+				"description": "Start a new autonomous task",
+				"inputSchema": json.RawMessage(`{"type":"object","properties":{"task":{"type":"string","description":"Task description"}}}`),
+			},
+			{
+				"name":        "auracrab_list_tasks",
+				"description": "List all tasks managed by Auracrab",
+				"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+			{
+				"name":        "auracrab_watch_health",
+				"description": "Watch vibeauracle health logs and report issues",
+				"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
+			},
+		}
+
+		// Add dynamic skills
+		for _, s := range skills.GetRegistry() {
+			var manifestMap map[string]interface{}
+			_ = json.Unmarshal(s.Manifest(), &manifestMap)
+			
+			toolSet = append(toolSet, map[string]interface{}{
+				"name":        s.Name(),
+				"description": s.Description(),
+				"inputSchema": manifestMap["parameters"],
+			})
+		}
+
 		manifest := map[string]interface{}{
 			"id":          "auracrab",
 			"name":        "Auracrab",
@@ -27,28 +64,7 @@ var vibeManifestCmd = &cobra.Command{
 			"command":     "auracrab",
 			"update_cmd":  "auracrab update",
 			"inbuilt":     true,
-			"tool_set": []map[string]interface{}{
-				{
-					"name":        "auracrab_status",
-					"description": "Get the current status of the Auracrab daemon",
-					"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
-				},
-				{
-					"name":        "auracrab_start_task",
-					"description": "Start a new autonomous task",
-					"inputSchema": json.RawMessage(`{"type":"object","properties":{"task":{"type":"string","description":"Task description"}}}`),
-				},
-				{
-					"name":        "auracrab_list_tasks",
-					"description": "List all tasks managed by Auracrab",
-					"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
-				},
-				{
-					"name":        "auracrab_watch_health",
-					"description": "Watch vibeauracle health logs and report issues",
-					"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
-				},
-			},
+			"tool_set":    toolSet,
 		}
 		data, _ := json.MarshalIndent(manifest, "", "  ")
 		fmt.Println(string(data))
@@ -67,6 +83,21 @@ var executeCmd = &cobra.Command{
 		toolName := args[0]
 		butler := core.GetButler()
 		
+		// Try dynamic skills first
+		if s, ok := skills.GetRegistry()[toolName]; ok {
+			var argData json.RawMessage
+			if len(args) > 1 {
+				argData = json.RawMessage(args[1])
+			}
+			res, err := s.Execute(context.Background(), argData)
+			if err != nil {
+				fmt.Printf(`{"content": "Error: %v", "status": "error"}`+"\n", err)
+				return
+			}
+			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", res)
+			return
+		}
+
 		switch toolName {
 		case "auracrab_status":
 			status := butler.GetStatus()
