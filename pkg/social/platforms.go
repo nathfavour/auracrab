@@ -2,7 +2,6 @@ package social
 
 import (
 	"context"
-	"fmt"
 	"log"
 )
 
@@ -40,6 +39,33 @@ func (l *LinkedInPlatform) Post(ctx context.Context, content string) (string, er
 func (l *LinkedInPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) {
 	return []Post{}, nil
 }
+
+type FacebookPlatform struct{}
+
+func (f *FacebookPlatform) Name() string { return "facebook" }
+func (f *FacebookPlatform) Post(ctx context.Context, content string) (string, error) {
+	log.Printf("Posting to Facebook: %s", content)
+	return "https://facebook.com/mock_post", nil
+}
+func (f *FacebookPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+
+type InstagramPlatform struct{}
+
+func (i *InstagramPlatform) Name() string { return "instagram" }
+func (i *InstagramPlatform) Post(ctx context.Context, content string) (string, error) {
+	log.Printf("Posting to Instagram: %s", content)
+	return "https://instagram.com/mock_post", nil
+}
+func (i *InstagramPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+
+type ThreadsPlatform struct{}
+
+func (t *ThreadsPlatform) Name() string { return "threads" }
+func (t *ThreadsPlatform) Post(ctx context.Context, content string) (string, error) {
+	log.Printf("Posting to Threads: %s", content)
+	return "https://threads.net/mock_post", nil
+}
+func (t *ThreadsPlatform) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
 
 func init() {
 	// These would ideally be registered via config
