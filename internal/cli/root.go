@@ -20,6 +20,10 @@ var rootCmd = &cobra.Command{
 	Short: "auracrab is a modular CLI tool",
 	Long:  `A highly modular CLI project structure built with Go and Cobra.`,
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, BuildDate),
+	Run: func(cmd *cobra.Command, args []string) {
+		// If no subcommand is provided, run the start command (TUI)
+		StartCmd.Run(cmd, args)
+	},
 }
 
 func Execute() {

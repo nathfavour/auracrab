@@ -14,10 +14,10 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(StartCmd)
 }
 
-var startCmd = &cobra.Command{
+var StartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the interactive TUI and butler service",
 	Run: func(cmd *cobra.Command, args []string) {
