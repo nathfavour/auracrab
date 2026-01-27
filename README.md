@@ -117,10 +117,6 @@ Auracrab follows a modular, plugin-based architecture:
 > [!TIP]
 > Check out [ARCHITECTURE.md](./ARCHITECTURE.md) for a deep dive into the internals.
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) to get started.
-
 ---
 
 <p align="center">
