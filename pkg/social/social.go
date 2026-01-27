@@ -3,6 +3,8 @@ package social
 import (
 "context"
 "fmt"
+"strings"
+"sync"
 )
 
 // Platform defines the interface for social media automation.
@@ -23,22 +25,46 @@ type Manager struct {
 	platforms map[string]Platform
 }
 
-func NewManager() *Manager {
-	return &Manager{
-		platforms: make(map[string]Platform),
-	}
+var (
+managerInstance *Manager
+once            sync.Once
+)
+
+func GetManager() *Manager {
+	once.Do(func() {
+		managerInstance = &Manager{
+			platforms: make(map[string]Platform),
+		}
+		// Register default drivers
+		managerInstance.Register(&XDriver{})
+		managerInstance.Register(&LinkedInDriver{})
+		managerInstance.Register(&FacebookDriver{})
+		managerInstance.Register(&InstagramDriver{})
+		managerInstance.Register(&ThreadsDriver{})
+	})
+	return managerInstance
 }
 
 func (m *Manager) Register(p Platform) {
 	m.platforms[p.Name()] = p
 }
 
-func (m *Manager) GetPlatform(name string) (Platform, error) {
-	p, ok := m.platforms[name]
-	if !ok {
-		return nil, fmt.Errorf("platform %s not supported", name)
+func (m *Manager) PostToAll(ctx context.Context, content string, platforms []string) string {
+	var results []string
+	for _, name := range platforms {
+		p, ok := m.platforms[name]
+		if !ok {
+			results = append(results, fmt.Sprintf("%s: [Error] Platform not found", name))
+			continue
+		}
+		res, err := p.Post(ctx, content)
+		if err != nil {
+			results = append(results, fmt.Sprintf("%s: [Error] %v", name, err))
+		} else {
+			results = append(results, fmt.Sprintf("%s: [Success] %s", name, res))
+		}
 	}
-	return p, nil
+	return strings.Join(results, "\n")
 }
 
 func (m *Manager) ListPlatforms() []string {
