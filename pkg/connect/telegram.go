@@ -2,7 +2,6 @@ package connect
 
 import (
 	"context"
-	"fmt"
 	"log"
 )
 
