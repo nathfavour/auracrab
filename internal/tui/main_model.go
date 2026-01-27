@@ -65,34 +65,56 @@ styleHeader = lipgloss.NewStyle().
 
 	styleHealthOk   = lipgloss.NewStyle().Foreground(green)
 	styleHealthWarn = lipgloss.NewStyle().Foreground(red)
+
+	styleInput = lipgloss.NewStyle().
+			Foreground(white).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(purple).
+			Padding(0, 1).
+			Width(90)
+
+	styleStatus = lipgloss.NewStyle().
+			Italic(true).
+			Foreground(gray).
+			MarginLeft(2)
 )
 
 type tickMsg time.Time
 
 type Model struct {
-	tasks      []*core.Task
-	cursor     int
-	statusMsg  string
-	healthMsg  string
-	skillsList []string
-	width      int
-	height     int
-	ready      bool
+	tasks        []*core.Task
+	cursor       int
+	statusMsg    string
+	healthMsg    string
+	skillsList   []string
+	width        int
+	height       int
+	ready        bool
+	input        textinput.Model
+	banner       string
+	lastResponse string
+	isCapturing  bool
 }
 
 func InitialModel() Model {
 	butler := core.GetButler()
-	
-	var skillNames []string
-	// We can't easily list from registry without a new method, but we know the defaults
-skillNames = []string{"browser", "social", "autocommit", "system"}
 
-return Model{
-tasks:      butler.ListTasks(),
-statusMsg:  butler.GetStatus(),
-healthMsg:  butler.WatchHealth(),
-skillsList: skillNames,
-}
+	ti := textinput.New()
+	ti.Placeholder = "Enter task or /command..."
+	ti.Focus()
+	ti.CharLimit = 156
+	ti.Width = 80
+
+	var skillNames []string
+	skillNames = []string{"browser", "social", "autocommit", "system"}
+
+	return Model{
+		tasks:      butler.ListTasks(),
+		statusMsg:  butler.GetStatus(),
+		healthMsg:  butler.WatchHealth(),
+		skillsList: skillNames,
+		input:      ti,
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -106,100 +128,147 @@ return tickMsg(t)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-switch msg := msg.(type) {
-case tea.WindowSizeMsg:
-m.width = msg.Width
-m.height = msg.Height
-m.ready = true
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
 
-case tickMsg:
-butler := core.GetButler()
-m.tasks = butler.ListTasks()
-m.statusMsg = butler.GetStatus()
-m.healthMsg = butler.WatchHealth()
-return m, tick()
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.ready = true
+		m.banner = buildBanner(m.width)
 
-case tea.KeyMsg:
-switch msg.String() {
-case "ctrl+c", "q":
-return m, tea.Quit
-case "up", "k":
-if m.cursor > 0 {
-m.cursor--
+	case tickMsg:
+		butler := core.GetButler()
+		m.tasks = butler.ListTasks()
+		m.statusMsg = butler.GetStatus()
+		m.healthMsg = butler.WatchHealth()
+		return m, tick()
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.tasks)-1 {
+				m.cursor++
+			}
+		case "enter":
+			if m.input.Value() != "" {
+				val := m.input.Value()
+				m.input.SetValue("")
+
+				if strings.HasPrefix(val, "/") {
+					return m.handleCommand(val)
+				}
+
+				// Start as task
+				_, _ = core.GetButler().StartTask(context.Background(), val)
+				m.lastResponse = "Task started: " + val
+			}
+		}
+	}
+
+	m.input, cmd = m.input.Update(msg)
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }
-case "down", "j":
-if m.cursor < len(m.tasks)-1 {
-m.cursor++
-}
-case "r":
-m.tasks = core.GetButler().ListTasks()
-}
-}
-return m, nil
+
+func (m Model) handleCommand(input string) (tea.Model, tea.Cmd) {
+	parts := strings.Split(input, " ")
+	cmd := parts[0]
+
+	switch cmd {
+	case "/shot":
+		return m.takeScreenshot()
+	case "/exit", "/quit":
+		return m, tea.Quit
+	case "/help":
+		m.lastResponse = "Commands: /shot - Take screenshot, /exit - Quit"
+	default:
+		m.lastResponse = "Unknown command: " + cmd
+	}
+	return m, nil
 }
 
 func (m Model) View() string {
-if !m.ready {
-return "Initializing Auracrab TUI..."
-}
+	if !m.ready {
+		return "Initializing Auracrab TUI..."
+	}
 
-header := styleHeader.Render("🦀 AURACRAB  v1.0.0 - AGENTIC DAEMON")
+	var view strings.Builder
 
-// Left Column: Tasks
-var taskList strings.Builder
-taskList.WriteString(styleSectionTitle.Render("DELEGATED TASKS") + "\n")
+	// Banner
+	view.WriteString(m.banner + "\n\n")
 
-if len(m.tasks) == 0 {
-taskList.WriteString(styleFooter.Render("  No active tasks. Send a message via Telegram/Discord to start."))
-} else {
-for i, task := range m.tasks {
-statusIcon := "⏳"
-if task.Status == core.TaskStatusCompleted {
-statusIcon = "✅"
-} else if task.Status == core.TaskStatusFailed {
-statusIcon = "❌"
-}
+	// Left Column: Tasks
+	var taskList strings.Builder
+	taskList.WriteString(styleSectionTitle.Render("DELEGATED TASKS") + "\n")
 
-content := task.Content
-if len(content) > 50 {
-content = content[:47] + "..."
-}
+	if len(m.tasks) == 0 {
+		taskList.WriteString(styleFooter.Render("  No active tasks. Enter a task below to start."))
+	} else {
+		for i, task := range m.tasks {
+			statusIcon := "⏳"
+			if task.Status == core.TaskStatusCompleted {
+				statusIcon = "✅"
+			} else if task.Status == core.TaskStatusFailed {
+				statusIcon = "❌"
+			}
 
-cardContent := fmt.Sprintf("%s %s\n%s", statusIcon, task.ID, content)
+			content := task.Content
+			if len(content) > 50 {
+				content = content[:47] + "..."
+			}
 
-if m.cursor == i {
-taskList.WriteString(styleSelectedTask.Render(cardContent) + "\n")
-} else {
-taskList.WriteString(styleTaskCard.Render(cardContent) + "\n")
-}
-}
-}
+			cardContent := fmt.Sprintf("%s %s\n%s", statusIcon, task.ID, content)
 
-// Right Column: System Info
-var sidebar strings.Builder
-sidebar.WriteString(styleSectionTitle.Render("SYSTEM VIBES") + "\n")
+			if m.cursor == i {
+				taskList.WriteString(styleSelectedTask.Render(cardContent) + "\n")
+			} else {
+				taskList.WriteString(styleTaskCard.Render(cardContent) + "\n")
+			}
+		}
+	}
 
-healthStyle := styleHealthOk
-if strings.Contains(strings.ToLower(m.healthMsg), "warning") || strings.Contains(strings.ToLower(m.healthMsg), "anomaly") {
-healthStyle = styleHealthWarn
-}
+	// Right Column: System Info
+	var sidebar strings.Builder
+	sidebar.WriteString(styleSectionTitle.Render("SYSTEM VIBES") + "\n")
 
-sidebar.WriteString("Health: " + healthStyle.Render(m.healthMsg) + "\n\n")
-sidebar.WriteString("Status: " + m.statusMsg + "\n\n")
+	healthStyle := styleHealthOk
+	if strings.Contains(strings.ToLower(m.healthMsg), "warning") || strings.Contains(strings.ToLower(m.healthMsg), "anomaly") {
+		healthStyle = styleHealthWarn
+	}
 
-sidebar.WriteString(styleSectionTitle.Render("LOADED SKILLS") + "\n")
-for _, s := range m.skillsList {
-sidebar.WriteString("• " + s + "\n")
-}
+	sidebar.WriteString("Health: " + healthStyle.Render(m.healthMsg) + "\n\n")
+	sidebar.WriteString("Status: " + m.statusMsg + "\n\n")
 
-// Layout
-mainContent := lipgloss.JoinHorizontal(lipgloss.Top, 
-taskList.String(),
-styleSidebar.Render(sidebar.String()),
-)
+	sidebar.WriteString(styleSectionTitle.Render("LOADED SKILLS") + "\n")
+	for _, s := range m.skillsList {
+		sidebar.WriteString("• " + s + "\n")
+	}
 
-// Footer
-footer := styleFooter.Render("\n[↑/↓] Navigate • [r] Refresh • [q] Quit • [v] View Output")
+	// Layout Main
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top,
+		taskList.String(),
+		styleSidebar.Render(sidebar.String()),
+	)
+	view.WriteString(mainContent)
 
-return lipgloss.JoinVertical(lipgloss.Left, header, mainContent, footer)
+	// Footer: Input & Status
+	view.WriteString("\n\n")
+	if m.lastResponse != "" {
+		view.WriteString(styleStatus.Render(m.lastResponse) + "\n")
+	}
+	view.WriteString(styleInput.Render(m.input.View()))
+	view.WriteString(styleFooter.Render("\n[↑/↓] Navigate • [Enter] Submit • [/shot] Screenshot • [Ctrl+C] Quit"))
+
+	return view.String()
 }
