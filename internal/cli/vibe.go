@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,6 @@ var vibeManifestCmd = &cobra.Command{
 			"id":          "auracrab",
 			"name":        "Auracrab",
 			"repo":        "nathfavour/auracrab",
-			"version":     Version,
 			"description": "Autonomous, persistent AI agent daemon",
 			"protocol":    "stdio",
 			"command":     "auracrab",
@@ -37,6 +37,16 @@ var vibeManifestCmd = &cobra.Command{
 					"name":        "auracrab_start_task",
 					"description": "Start a new autonomous task",
 					"inputSchema": json.RawMessage(`{"type":"object","properties":{"task":{"type":"string","description":"Task description"}}}`),
+				},
+				{
+					"name":        "auracrab_list_tasks",
+					"description": "List all tasks managed by Auracrab",
+					"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
+				},
+				{
+					"name":        "auracrab_watch_health",
+					"description": "Watch vibeauracle health logs and report issues",
+					"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
 				},
 			},
 		}
@@ -55,12 +65,33 @@ var executeCmd = &cobra.Command{
 		}
 		
 		toolName := args[0]
+		butler := core.GetButler()
 		
 		switch toolName {
 		case "auracrab_status":
-			fmt.Println(`{"content": "Auracrab is idling.", "status": "success"}`)
+			status := butler.GetStatus()
+			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", status)
 		case "auracrab_start_task":
-			fmt.Println(`{"content": "Task started successfully.", "status": "success"}`)
+			var params struct {
+				Task string `json:"task"`
+			}
+			if len(args) > 1 {
+				_ = json.Unmarshal([]byte(args[1]), &params)
+			}
+			
+			task, err := butler.StartTask(cmd.Context(), params.Task)
+			if err != nil {
+				fmt.Printf(`{"content": "Error: %v", "status": "error"}`+"\n", err)
+				return
+			}
+			fmt.Printf(`{"content": "Task started: %s (ID: %s)", "status": "success"}`+"\n", params.Task, task.ID)
+		case "auracrab_list_tasks":
+			tasks := butler.ListTasks()
+			data, _ := json.Marshal(tasks)
+			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", string(data))
+		case "auracrab_watch_health":
+			health := butler.WatchHealth()
+			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", health)
 		default:
 			fmt.Printf("Unknown tool: %s\n", toolName)
 			os.Exit(1)
