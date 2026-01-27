@@ -6,15 +6,17 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/nathfavour/auracrab/pkg/config"
 )
 
 // Crab represents a user-defined specialized agent.
 type Crab struct {
-	ID           string   "json:\"id\""
-	Name         string   "json:\"name\""
-	Description  string   "json:\"description\""
-	Instructions string   "json:\"instructions\""
-	Skills       []string "json:\"skills\"" // Names of skills this crab can use
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Instructions string   `json:"instructions"`
+	Skills       []string `json:"skills"` // Names of skills this crab can use
 }
 
 type Registry struct {
@@ -24,14 +26,7 @@ type Registry struct {
 }
 
 func NewRegistry() (*Registry, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	dataDir := filepath.Join(home, ".local", "share", "auracrab", "crabs")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, err
-	}
+	dataDir := config.CrabsDir()
 
 	r := &Registry{
 		dataDir: dataDir,

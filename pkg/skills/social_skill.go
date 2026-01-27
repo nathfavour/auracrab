@@ -17,7 +17,10 @@ func NewSocialSkill() *SocialSkill {
 	// Register default platforms (placeholders)
 	mgr.Register(&social.XPlatform{})
 	mgr.Register(&social.LinkedInPlatform{})
-	
+	mgr.Register(&social.FacebookPlatform{})
+	mgr.Register(&social.InstagramPlatform{})
+	mgr.Register(&social.ThreadsPlatform{})
+
 	return &SocialSkill{manager: mgr}
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nathfavour/auracrab/pkg/connect"
+	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/crabs"
 )
 
@@ -48,9 +49,7 @@ var (
 
 func GetButler() *Butler {
 	once.Do(func() {
-		home, _ := os.UserHomeDir()
-		stateDir := filepath.Join(home, ".local", "share", "auracrab")
-		_ = os.MkdirAll(stateDir, 0755)
+		stateDir := config.DataDir()
 
 		reg, _ := crabs.NewRegistry()
 		instance = &Butler{
@@ -114,7 +113,7 @@ func (b *Butler) handleChannelMessage(from string, text string) string {
 }
 
 func (b *Butler) load() {
-	path := filepath.Join(b.stateDir, "tasks.json")
+	path := config.TasksPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -127,7 +126,7 @@ func (b *Butler) load() {
 func (b *Butler) save() {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	path := filepath.Join(b.stateDir, "tasks.json")
+	path := config.TasksPath()
 	data, _ := json.MarshalIndent(b.tasks, "", "  ")
 	_ = os.WriteFile(path, data, 0644)
 }
