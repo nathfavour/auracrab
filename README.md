@@ -8,6 +8,9 @@
   <i>Persistent. Proactive. Powerful.</i>
 </p>
 
+> [!IMPORTANT]
+> Auracrab is a core component of the **[vibeauracle](https://github.com/nathfavour/vibeauracle)** Go CLI ecosystem. It leverages **vibeauracle**'s advanced intelligence layer for repository-wide analysis, Copilot SDK planning, and multi-agent coordination.
+
 <p align="center">
   <a href="https://github.com/nathfavour/auracrab/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/nathfavour/auracrab/release.yml?style=flat-square&logo=github" alt="Release"></a>
   <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go" alt="Go Version"></a>
@@ -80,8 +83,14 @@ Direct integration with <code>vibeauracle</code> for high-fidelity intelligence 
 
 ### Installation
 
+**Via Shell (Recommended):**
 ```bash
 curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/main/install.sh | bash
+```
+
+**Via Go:**
+```bash
+go install github.com/nathfavour/auracrab/cmd/auracrab@latest
 ```
 
 ### Quick Commands
