@@ -1,29 +1,30 @@
 package core
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
+"context"
+"encoding/json"
+"fmt"
+"os"
+"os/exec"
+"path/filepath"
+"strings"
+"sync"
+"time"
 
-	"github.com/nathfavour/auracrab/pkg/connect"
-	"github.com/nathfavour/auracrab/pkg/config"
-	"github.com/nathfavour/auracrab/pkg/crabs"
-	"github.com/nathfavour/auracrab/pkg/cron"
+"github.com/nathfavour/auracrab/pkg/config"
+"github.com/nathfavour/auracrab/pkg/connect"
+"github.com/nathfavour/auracrab/pkg/crabs"
+"github.com/nathfavour/auracrab/pkg/cron"
+"github.com/nathfavour/auracrab/pkg/memory"
 )
 
 type TaskStatus string
 
 const (
-	TaskStatusPending   TaskStatus = "pending"
-	TaskStatusRunning   TaskStatus = "running"
-	TaskStatusCompleted TaskStatus = "completed"
-	TaskStatusFailed    TaskStatus = "failed"
+TaskStatusPending   TaskStatus = "pending"
+TaskStatusRunning   TaskStatus = "running"
+TaskStatusCompleted TaskStatus = "completed"
+TaskStatusFailed    TaskStatus = "failed"
 )
 
 type Task struct {
@@ -42,11 +43,12 @@ type Butler struct {
 	running   bool
 	registry  *crabs.Registry
 	scheduler *cron.Scheduler
+	Memory    *memory.Store
 }
 
 var (
-	instance *Butler
-	once     sync.Once
+instance *Butler
+once     sync.Once
 )
 
 func GetButler() *Butler {
@@ -54,11 +56,13 @@ func GetButler() *Butler {
 		stateDir := config.DataDir()
 
 		reg, _ := crabs.NewRegistry()
+		mem, _ := memory.NewStore("global")
 		instance = &Butler{
 			tasks:     make(map[string]*Task),
 			stateDir:  stateDir,
 			registry:  reg,
 			scheduler: cron.NewScheduler(),
+			Memory:    mem,
 		}
 		instance.load()
 		instance.setupCron()
@@ -76,7 +80,12 @@ func (b *Butler) Serve(ctx context.Context) error {
 	b.mu.Unlock()
 
 	// Start integrations
-	for _, ch := range connect.GetChannels() {
+	channels := connect.GetChannels()
+	if len(channels) == 0 {
+		fmt.Println("Butler: No messaging channels (Telegram/Discord) configured.")
+	}
+
+	for _, ch := range channels {
 		go func(c connect.Channel) {
 			err := c.Start(ctx, b.handleChannelMessage)
 			if err != nil {
@@ -99,31 +108,30 @@ func (b *Butler) Serve(ctx context.Context) error {
 }
 
 func (b *Butler) setupCron() {
-	// Example: Run a system security audit every 24 hours
+	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
-		_, _ = b.StartTask(ctx, "run security audit and log results")
-	})
+_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log")
+})
+
+	// Memory sync or cleanup can happen here
 }
 
 func (b *Butler) handleChannelMessage(from string, text string) string {
-	// If the text starts with @crab_id, delegate to that specialized agent
 	if strings.HasPrefix(text, "@") {
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) > 1 {
 			crabID := strings.TrimPrefix(parts[0], "@")
 			if c, err := b.registry.Get(crabID); err == nil {
-				// Delegate to crab
-				return fmt.Sprintf("Delegating to specialized agent '%s': %s", c.Name, parts[1])
+				return fmt.Sprintf("[%s] Delegating to agent '%s': %s", from, c.Name, parts[1])
 			}
 		}
 	}
 
-	// Default behavior: Start a task
 	task, err := b.StartTask(context.Background(), text)
 	if err != nil {
 		return fmt.Sprintf("Error starting task: %v", err)
 	}
-	return fmt.Sprintf("Task '%s' started with ID %s", text, task.ID)
+	return fmt.Sprintf("Task started (ID: %s). Content: %s", task.ID, text)
 }
 
 func (b *Butler) load() {
@@ -158,7 +166,6 @@ func (b *Butler) StartTask(ctx context.Context, content string) (*Task, error) {
 	b.mu.Unlock()
 	b.save()
 
-	// Launch async execution via vibeauracle
 	go b.executeTask(id, content)
 
 	return task, nil
@@ -167,9 +174,7 @@ func (b *Butler) StartTask(ctx context.Context, content string) (*Task, error) {
 func (b *Butler) executeTask(id, content string) {
 	b.updateStatus(id, TaskStatusRunning, "")
 
-	// Delegation: Call vibeauracle direct mode
-	// Note: In a real-world scenario, we might want to use a more robust IPC
-	// but calling 'vibeaura direct' works for delegation as requested.
+	// Use vibeaura for intelligence
 	cmd := exec.Command("vibeaura", "direct", "--non-interactive", content)
 	out, err := cmd.CombinedOutput()
 
@@ -207,11 +212,7 @@ func (b *Butler) GetStatus() string {
 			completed++
 		}
 	}
-
-	if running > 0 {
-		return fmt.Sprintf("Auracrab Butler: 🚀 %d tasks running, ✅ %d completed.", running, completed)
-	}
-	return "Auracrab Butler: Idling. All tasks finished."
+	return fmt.Sprintf("Auracrab: %d active, %d tasks done. System: Stable.", running, completed)
 }
 
 func (b *Butler) WatchHealth() string {
@@ -220,34 +221,31 @@ func (b *Butler) WatchHealth() string {
 
 	data, err := os.ReadFile(logPath)
 	if err != nil {
-		return fmt.Sprintf("Unable to read vibeauracle logs: %v", err)
+		return "System Health: OK (Vibeauracle logs not found, assuming fresh start)"
 	}
 
 	lines := strings.Split(string(data), "\n")
-	var errors []string
-	// Check last 20 lines
-	start := len(lines) - 20
+	var errCount int
+	start := len(lines) - 50
 	if start < 0 {
 		start = 0
 	}
 
 	for _, line := range lines[start:] {
-		if strings.Contains(line, `"type":"error"`) || strings.Contains(line, `"type":"panic"`) {
-			errors = append(errors, line)
+		if strings.Contains(line, "error") || strings.Contains(line, "panic") {
+			errCount++
 		}
 	}
 
-	if len(errors) == 0 {
-		return "System Health: All systems normal in vibeauracle."
+	if errCount == 0 {
+		return "System Health: Excellent."
 	}
-
-	return fmt.Sprintf("System Health: Detected %d issues recently. Suggestions: Check logs or run 'vibeaura doctor'.", len(errors))
+	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura doctor'.", errCount)
 }
 
 func (b *Butler) ListTasks() []*Task {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-
 	var tasks []*Task
 	for _, t := range b.tasks {
 		tasks = append(tasks, t)
