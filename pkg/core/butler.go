@@ -117,6 +117,10 @@ _, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audit
 }
 
 func (b *Butler) handleChannelMessage(from string, text string) string {
+	if text == "get_status_internal" {
+		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
+	}
+
 	if strings.HasPrefix(text, "@") {
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) > 1 {

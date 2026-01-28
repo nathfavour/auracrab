@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/nathfavour/auracrab/pkg/vault"
 )
 
 // DiscordChannel implements the Discord integration.
@@ -43,10 +45,50 @@ func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, 
 			return
 		}
 
-		log.Printf("[Discord][%s] %s", from, text)
+		v := vault.GetVault()
+		allowedChannels, _ := v.Get("DISCORD_ALLOWED_CHANNELS")
+
+		isAllowed := false
+		if allowedChannels == "" {
+			isAllowed = true
+		} else {
+			for _, idStr := range strings.Split(allowedChannels, ",") {
+				if strings.TrimSpace(idStr) == m.ChannelID {
+					isAllowed = true
+					break
+				}
+			}
+		}
+
+		log.Printf("[Discord][%s] (Channel: %s) %s", from, m.ChannelID, text)
+
+		// Handle internal bot commands
+		if strings.HasPrefix(text, "!") || strings.HasPrefix(text, "/") {
+			cmd := strings.Split(strings.TrimPrefix(strings.TrimPrefix(text, "!"), "/"), " ")[0]
+			switch cmd {
+			case "id":
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("This Channel ID is: `%s`\nTo allow this channel, run `/config set DISCORD_ALLOWED_CHANNELS %s` in the Auracrab TUI.", m.ChannelID, m.ChannelID))
+				return
+			case "status":
+				if !isAllowed {
+					return
+				}
+				reply := onMessage(from, "get_status_internal")
+				s.ChannelMessageSend(m.ChannelID, "📊 **System Status**\n"+reply)
+				return
+			}
+		}
+
+		if !isAllowed {
+			log.Printf("Ignored Discord message from unauthorized channel: %s", m.ChannelID)
+			return
+		}
 
 		// Dispatch to Butler
 		reply := onMessage(from, text)
+		if len(reply) > 1900 {
+			reply = reply[:1897] + "..."
+		}
 
 		// Send reply
 		_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> %s", m.Author.ID, reply))
