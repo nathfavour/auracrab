@@ -272,6 +272,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.input.Value() != "" {
 				val := m.input.Value()
 				m.input.SetValue("")
+				m.historyIndex = -1
+
+				// Append to history if not same as last
+				if len(m.commandHistory) == 0 || m.commandHistory[len(m.commandHistory)-1] != val {
+					m.commandHistory = append(m.commandHistory, val)
+				}
 
 				if strings.HasPrefix(val, "/") {
 					return m.handleCommand(val)
