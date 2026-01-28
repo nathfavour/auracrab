@@ -18,6 +18,8 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/core"
+	"github.com/nathfavour/auracrab/pkg/skills"
+	"github.com/nathfavour/auracrab/pkg/vault"
 )
 
 var (
@@ -107,7 +109,9 @@ func InitialModel() Model {
 	ti.Width = 80
 
 	var skillNames []string
-	skillNames = []string{"browser", "social", "autocommit", "system"}
+	for _, s := range skills.GetRegistry().List() {
+		skillNames = append(skillNames, s.Name())
+	}
 
 	return Model{
 		tasks:      butler.ListTasks(),
@@ -187,15 +191,81 @@ func (m Model) handleCommand(input string) (tea.Model, tea.Cmd) {
 	cmd := parts[0]
 
 	switch cmd {
+	case "/config":
+		if len(parts) < 2 {
+			m.lastResponse = "Usage: /config [list|set <key> <val>|get <key>|toggle <key>]"
+			return m, nil
+		}
+		return m.handleConfigCommand(parts[1:])
 	case "/shot":
 		return m.takeScreenshot()
 	case "/exit", "/quit":
 		return m, tea.Quit
 	case "/help":
-		m.lastResponse = "Commands: /shot - Take screenshot, /exit - Quit"
+		m.lastResponse = "Commands: /shot - Take screenshot, /config - Manage settings, /exit - Quit"
 	default:
 		m.lastResponse = "Unknown command: " + cmd
 	}
+	return m, nil
+}
+
+func (m Model) handleConfigCommand(args []string) (tea.Model, tea.Cmd) {
+	v := vault.GetVault()
+	sub := args[0]
+
+	switch sub {
+	case "list":
+		keys, err := v.List()
+		if err != nil {
+			m.lastResponse = "Error listing configs: " + err.Error()
+		} else if len(keys) == 0 {
+			m.lastResponse = "No configurations found."
+		} else {
+			m.lastResponse = "Configs: " + strings.Join(keys, ", ")
+		}
+	case "set":
+		if len(args) < 3 {
+			m.lastResponse = "Usage: /config set <key> <value>"
+		} else {
+			err := v.Set(args[1], args[2])
+			if err != nil {
+				m.lastResponse = "Error setting config: " + err.Error()
+			} else {
+				m.lastResponse = fmt.Sprintf("Config '%s' set to '%s'", args[1], args[2])
+			}
+		}
+	case "get":
+		if len(args) < 2 {
+			m.lastResponse = "Usage: /config get <key>"
+		} else {
+			val, err := v.Get(args[1])
+			if err != nil {
+				m.lastResponse = "Error getting config: " + err.Error()
+			} else {
+				m.lastResponse = fmt.Sprintf("%s: %s", args[1], val)
+			}
+		}
+	case "toggle":
+		if len(args) < 2 {
+			m.lastResponse = "Usage: /config toggle <key>"
+		} else {
+			key := args[1]
+			val, err := v.Get(key)
+			newVal := "true"
+			if err == nil && (val == "true" || val == "on" || val == "yes" || val == "1") {
+				newVal = "false"
+			}
+			err = v.Set(key, newVal)
+			if err != nil {
+				m.lastResponse = "Error toggling config: " + err.Error()
+			} else {
+				m.lastResponse = fmt.Sprintf("Config '%s' toggled to %s", key, newVal)
+			}
+		}
+	default:
+		m.lastResponse = "Unknown config subcommand: " + sub
+	}
+
 	return m, nil
 }
 
@@ -269,7 +339,7 @@ func (m Model) View() string {
 		view.WriteString(styleStatus.Render(m.lastResponse) + "\n")
 	}
 	view.WriteString(styleInput.Render(m.input.View()))
-	view.WriteString(styleFooter.Render("\n[↑/↓] Navigate • [Enter] Submit • [/shot] Screenshot • [Ctrl+C] Quit"))
+	view.WriteString(styleFooter.Render("\n[↑/↓] Navigate • [Enter] Submit • [/shot] Screenshot • [/config] Config • [Ctrl+C] Quit"))
 
 	return view.String()
 }

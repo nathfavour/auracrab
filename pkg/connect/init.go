@@ -14,7 +14,8 @@ func init() {
 	if err != nil {
 		token = os.Getenv("TELEGRAM_TOKEN")
 	}
-	if token != "" {
+	enabled, _ := v.Get("TELEGRAM_ENABLED")
+	if token != "" && (enabled == "" || enabled == "true") {
 		RegisterChannel(&TelegramChannel{Token: token})
 	}
 
@@ -23,7 +24,8 @@ func init() {
 	if err != nil {
 		discordToken = os.Getenv("DISCORD_TOKEN")
 	}
-	if discordToken != "" {
+	discordEnabled, _ := v.Get("DISCORD_ENABLED")
+	if discordToken != "" && (discordEnabled == "" || discordEnabled == "true") {
 		RegisterChannel(&DiscordChannel{Token: discordToken})
 	}
 }
