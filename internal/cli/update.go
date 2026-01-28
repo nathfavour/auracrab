@@ -15,28 +15,31 @@ var updateCmd = &cobra.Command{
 		fmt.Printf("Current Version: %s\n", Version)
 		fmt.Println("Checking for updates...")
 
-		// Seamless update strategy: Run the universal installer.
-		// This handles dependency management (vibeaura), platform detection,
-		// and proper path installation in one reliable step.
-		updateScript := "curl -fsSL https://raw.githubusercontent.com/nathfavour/auracrab/master/install.sh | bash"
-
-		fmt.Println("Running universal installer...")
-		updateCmd := exec.Command("bash", "-c", updateScript)
-		updateCmd.Stdout = os.Stdout
-		updateCmd.Stderr = os.Stderr
-
-		if err := updateCmd.Run(); err != nil {
-			fmt.Printf("\n❌ Update failed: %v\n", err)
-			os.Exit(1)
+		// Use local install.sh if we are in source directory for faster/smarter updates
+		scriptPath := "./install.sh"
+		if _, err := os.Stat(scriptPath); err != nil {
+			// Fallback to remote
+			scriptPath = "https://raw.githubusercontent.com/nathfavour/auracrab/master/install.sh"
+			fmt.Println("Running remote installer...")
+			updateCmd := exec.Command("bash", "-c", "curl -fsSL "+scriptPath+" | bash")
+			updateCmd.Stdout = os.Stdout
+			updateCmd.Stderr = os.Stderr
+			if err := updateCmd.Run(); err != nil {
+				fmt.Printf("\n❌ Update failed: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Println("Running local installer...")
+			updateCmd := exec.Command("bash", scriptPath)
+			updateCmd.Stdout = os.Stdout
+			updateCmd.Stderr = os.Stderr
+			if err := updateCmd.Run(); err != nil {
+				fmt.Printf("\n❌ Update failed: %v\n", err)
+				os.Exit(1)
+			}
 		}
 
-		fmt.Println("\n✨ Auracrab and dependencies updated successfully!")
-		fmt.Print("New Version: ")
-
-		// Verify
-		verifyCmd := exec.Command("auracrab", "version")
-		verifyCmd.Stdout = os.Stdout
-		verifyCmd.Run()
+		fmt.Println("\n✨ Update process completed!")
 	},
 }
 
