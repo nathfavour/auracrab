@@ -8,6 +8,8 @@ set -e
 AURACRAB_REPO="nathfavour/auracrab"
 VIBEAURACLE_REPO="nathfavour/vibeauracle"
 GITHUB_URL="https://github.com/$AURACRAB_REPO"
+DATA_DIR="$HOME/.auracrab"
+SOURCE_DIR="$DATA_DIR/source"
 
 # Detect OS and Arch
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -46,14 +48,12 @@ else
 fi
 
 mkdir -p "$INSTALL_DIR" 2>/dev/null || true
+mkdir -p "$SOURCE_DIR" 2>/dev/null || true
 
 # --- Intelligent Update Detection ---
 echo "Checking for updates..."
 REMOTE_SHA=""
-LATEST_TAG=""
-
 if command -v git >/dev/null 2>&1; then
-    # Try to get the latest commit SHA of master
     REMOTE_SHA=$(git ls-remote "$GITHUB_URL.git" HEAD | awk '{print $1}')
 fi
 
@@ -68,7 +68,7 @@ fi
 if [ "$UP_TO_DATE" = "true" ]; then
     echo "Auracrab is already up to date (${REMOTE_SHA:0:7})."
 else
-    # --- Intelligent Build-from-Source Detection ---
+    # --- Build from Source Pipeline ---
     BUILD_FROM_SOURCE=false
     if command -v go >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
         GO_VERSION=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
@@ -76,7 +76,6 @@ else
         V_MINOR=$(echo $GO_VERSION | cut -d. -f2)
         if [ "$V_MAJOR" -gt 1 ] || { [ "$V_MAJOR" -eq 1 ] && [ "$V_MINOR" -ge 21 ]; }; then
             BUILD_FROM_SOURCE=true
-            echo "Detected Go $GO_VERSION and Git. Building from source."
         fi
     fi
 
@@ -85,30 +84,18 @@ else
     fi
 
     if [ "$BUILD_FROM_SOURCE" = "true" ]; then
-        # Check if we are already in the auracrab source directory
-        if [ -f "go.mod" ] && grep -q "github.com/nathfavour/auracrab" go.mod;
- then
-            echo "Current directory is auracrab source."
-            # Only pull if changes actually exist remotely
-            if [ -n "$REMOTE_SHA" ]; then
-                LOCAL_REPO_SHA=$(git rev-parse HEAD)
-                if [ "$LOCAL_REPO_SHA" != "$REMOTE_SHA" ]; then
-                    echo "Updating local repository..."
-                    git pull origin master || true
-                fi
-            fi
-            SRC_DIR="$PWD"
-            CLEANUP=false
+        echo "Building auracrab from source in $SOURCE_DIR..."
+        
+        if [ -d "$SOURCE_DIR/.git" ]; then
+            cd "$SOURCE_DIR"
+            git fetch origin master
+            git reset --hard origin/master
         else
-            echo "Cloning auracrab source..."
-            TMP_DIR=$(mktemp -d)
-            git clone --depth 1 "$GITHUB_URL.git" "$TMP_DIR"
-            SRC_DIR="$TMP_DIR"
-            CLEANUP=true
+            rm -rf "$SOURCE_DIR"
+            git clone --depth 1 "$GITHUB_URL.git" "$SOURCE_DIR"
+            cd "$SOURCE_DIR"
         fi
 
-        cd "$SRC_DIR"
-        
         VERSION=$(git describe --tags --always || echo "dev")
         COMMIT=$(git rev-parse --short HEAD || echo "none")
         DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -117,18 +104,13 @@ else
                        -X github.com/nathfavour/auracrab/internal/cli.Commit=$COMMIT \
                        -X github.com/nathfavour/auracrab/internal/cli.BuildDate=$DATE"
         
-        echo "Building auracrab ($VERSION)..."
+        echo "Compiling auracrab ($VERSION)..."
         go build -ldflags "$LDFLAGS" -o auracrab ./cmd/auracrab
         
         if [ -w "$INSTALL_DIR" ]; then
             mv auracrab "$INSTALL_DIR/auracrab"
         else
             sudo mv auracrab "$INSTALL_DIR/auracrab"
-        fi
-        
-        if [ "$CLEANUP" = "true" ]; then
-            cd - > /dev/null
-            rm -rf "$SRC_DIR"
         fi
     else
         echo "Installing from binary..."
@@ -153,13 +135,13 @@ else
     echo "Successfully installed auracrab to $INSTALL_DIR/auracrab"
 fi
 
-# --- Ensure vibeauracle is installed ---
+# --- Dependency Sync (vibeauracle) ---
 if ! command -v vibeaura >/dev/null 2>&1; then
     echo "Installing vibeauracle (dependency)..."
     curl -fsSL "https://raw.githubusercontent.com/$VIBEAURACLE_REPO/release/install.sh" | bash
 else
-    # Vibeauracle installer already handles its own up-to-date checks
-    curl -fsSL "https://raw.githubusercontent.com/$VIBEAURACLE_REPO/release/install.sh" | bash > /dev/null 2>&1
+    # Let vibeauracle installer handle its own updates quietly
+    curl -fsSL "https://raw.githubusercontent.com/$VIBEAURACLE_REPO/release/install.sh" | bash > /dev/null 2>&1 || true
 fi
 
 # Add to PATH if necessary

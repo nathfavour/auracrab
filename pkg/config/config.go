@@ -35,6 +35,13 @@ func CrabsDir() string {
 	return path
 }
 
+// SourceDir returns the path to the source code directory inside data directory
+func SourceDir() string {
+	path := filepath.Join(DataDir(), "source")
+	_ = os.MkdirAll(path, 0755)
+	return path
+}
+
 // ScreenshotDir returns the path to the screenshots directory in system downloads
 func ScreenshotDir() string {
 	home, _ := os.UserHomeDir()
