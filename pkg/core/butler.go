@@ -203,7 +203,8 @@ func (b *Butler) executeTask(id, content string, convID string) {
 	// Use vibeaura for intelligence.
 	// We remove --non-interactive to allow it to run the full agentic loop 
 	// until the goal is achieved.
-	cmd := exec.Command("vibeaura", "direct", content)
+	// Explicitly request 'vibe' agent mode for tool access.
+	cmd := exec.Command("vibeaura", "direct", "--agent", "vibe", content)
 	out, err := cmd.CombinedOutput()
 
 	result := string(out)
