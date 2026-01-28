@@ -97,6 +97,9 @@ type Model struct {
 	banner         string
 	lastResponse   string
 	isCapturing    bool
+	// History fields
+	commandHistory []string
+	historyIndex   int
 	// Config mode fields
 	isConfiguring  bool
 	configSteps    []configStep
@@ -137,6 +140,7 @@ func InitialModel() Model {
 		skillsList:   skillNames,
 		input:        ti,
 		configValues: make(map[string]string),
+		historyIndex: -1,
 	}
 }
 
@@ -195,15 +199,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(cmds...)
 			}
 		case "up", "k":
+			if m.isConfiguring {
+				return m, nil
+			}
+			if len(m.commandHistory) > 0 {
+				if m.historyIndex == -1 {
+					m.historyIndex = len(m.commandHistory) - 1
+				} else if m.historyIndex > 0 {
+					m.historyIndex--
+				}
+				m.input.SetValue(m.commandHistory[m.historyIndex])
+				m.input.CursorEnd()
+				return m, nil
+			}
 			if m.cursor > 0 {
 				m.cursor--
 			}
 		case "down", "j":
+			if m.isConfiguring {
+				return m, nil
+			}
+			if m.historyIndex != -1 {
+				if m.historyIndex < len(m.commandHistory)-1 {
+					m.historyIndex++
+					m.input.SetValue(m.commandHistory[m.historyIndex])
+					m.input.CursorEnd()
+				} else {
+					m.historyIndex = -1
+					m.input.SetValue("")
+				}
+				return m, nil
+			}
 			if m.cursor < len(m.tasks)-1 {
 				m.cursor++
 			}
 		case "enter":
 			if m.isConfiguring {
+				// ... (config logic)
 				val := m.input.Value()
 				m.input.SetValue("")
 				m.input.EchoMode = textinput.EchoNormal
