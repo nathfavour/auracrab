@@ -109,8 +109,12 @@ func InitialModel() Model {
 	ti.Width = 80
 
 	var skillNames []string
+	v := vault.GetVault()
 	for _, s := range skills.GetRegistry().List() {
-		skillNames = append(skillNames, s.Name())
+		enabled, _ := v.Get(strings.ToUpper(s.Name()) + "_ENABLED")
+		if enabled == "" || enabled == "true" {
+			skillNames = append(skillNames, s.Name())
+		}
 	}
 
 	return Model{
@@ -150,6 +154,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks = butler.ListTasks()
 		m.statusMsg = butler.GetStatus()
 		m.healthMsg = butler.WatchHealth()
+
+		var skillNames []string
+		v := vault.GetVault()
+		for _, s := range skills.GetRegistry().List() {
+			enabled, _ := v.Get(strings.ToUpper(s.Name()) + "_ENABLED")
+			if enabled == "" || enabled == "true" {
+				skillNames = append(skillNames, s.Name())
+			}
+		}
+		m.skillsList = skillNames
+
 		return m, tick()
 
 	case tea.KeyMsg:

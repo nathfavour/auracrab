@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/skills"
+	"github.com/nathfavour/auracrab/pkg/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -60,7 +62,13 @@ var vibeManifestCmd = &cobra.Command{
 		}
 
 		// Add dynamic skills
+		v := vault.GetVault()
 		for _, s := range skills.GetRegistry().List() {
+			enabled, _ := v.Get(strings.ToUpper(s.Name()) + "_ENABLED")
+			if enabled != "" && enabled != "true" {
+				continue
+			}
+
 			var manifestMap map[string]interface{}
 			_ = json.Unmarshal(s.Manifest(), &manifestMap)
 
@@ -101,6 +109,13 @@ var executeCmd = &cobra.Command{
 
 		// Try dynamic skills first
 		if s, ok := skills.GetRegistry().Get(toolName); ok {
+			v := vault.GetVault()
+			enabled, _ := v.Get(strings.ToUpper(s.Name()) + "_ENABLED")
+			if enabled != "" && enabled != "true" {
+				fmt.Printf(`{"content": "Error: skill '%s' is disabled", "status": "error"}`+"\n", toolName)
+				return
+			}
+
 			var argData json.RawMessage
 			if len(args) > 1 {
 				argData = json.RawMessage(args[1])
