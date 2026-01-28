@@ -141,7 +141,7 @@ var executeCmd = &cobra.Command{
 				_ = json.Unmarshal([]byte(args[1]), &params)
 			}
 
-			task, err := butler.StartTask(cmd.Context(), params.Task)
+			task, err := butler.StartTask(cmd.Context(), params.Task, "")
 			if err != nil {
 				fmt.Printf(`{"content": "Error: %v", "status": "error"}`+"\n", err)
 				return

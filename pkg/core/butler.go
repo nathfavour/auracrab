@@ -44,6 +44,7 @@ type Butler struct {
 	registry  *crabs.Registry
 	scheduler *cron.Scheduler
 	Memory    *memory.Store
+	History   *memory.HistoryStore
 }
 
 var (
@@ -57,12 +58,15 @@ func GetButler() *Butler {
 
 		reg, _ := crabs.NewRegistry()
 		mem, _ := memory.NewStore("global")
+		hist, _ := memory.NewHistoryStore()
+
 		instance = &Butler{
 			tasks:     make(map[string]*Task),
 			stateDir:  stateDir,
 			registry:  reg,
 			scheduler: cron.NewScheduler(),
 			Memory:    mem,
+			History:   hist,
 		}
 		instance.load()
 		instance.setupCron()
@@ -110,7 +114,7 @@ func (b *Butler) Serve(ctx context.Context) error {
 func (b *Butler) setupCron() {
 	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
-_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log")
+_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
 })
 
 	// Memory sync or cleanup can happen here
@@ -121,21 +125,34 @@ func (b *Butler) handleChannelMessage(from string, text string) string {
 		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
 	}
 
+	// Record incoming message in history
+	convID, err := b.History.GetOrCreateConversationForPlatform("messaging", from)
+	if err == nil {
+		_ = b.History.AddMessage(convID, "user", text)
+	}
+
 	if strings.HasPrefix(text, "@") {
 		parts := strings.SplitN(text, " ", 2)
 		if len(parts) > 1 {
 			crabID := strings.TrimPrefix(parts[0], "@")
 			if c, err := b.registry.Get(crabID); err == nil {
-				return fmt.Sprintf("[%s] Delegating to agent '%s': %s", from, c.Name, parts[1])
+				reply := fmt.Sprintf("[%s] Delegating to agent '%s': %s", from, c.Name, parts[1])
+				if err == nil {
+					_ = b.History.AddMessage(convID, "assistant", reply)
+				}
+				return reply
 			}
 		}
 	}
 
-	task, err := b.StartTask(context.Background(), text)
+	task, err := b.StartTask(context.Background(), text, convID)
 	if err != nil {
 		return fmt.Sprintf("Error starting task: %v", err)
 	}
-	return fmt.Sprintf("Task started (ID: %s). Content: %s", task.ID, text)
+
+	reply := fmt.Sprintf("Task started (ID: %s). Content: %s", task.ID, text)
+	// We don't record "Task started" in history as a message, we wait for the actual result from executeTask
+	return reply
 }
 
 func (b *Butler) load() {
@@ -157,7 +174,7 @@ func (b *Butler) save() {
 	_ = os.WriteFile(path, data, 0644)
 }
 
-func (b *Butler) StartTask(ctx context.Context, content string) (*Task, error) {
+func (b *Butler) StartTask(ctx context.Context, content string, convID string) (*Task, error) {
 	b.mu.Lock()
 	id := fmt.Sprintf("task_%d", time.Now().Unix())
 	task := &Task{
@@ -170,24 +187,30 @@ func (b *Butler) StartTask(ctx context.Context, content string) (*Task, error) {
 	b.mu.Unlock()
 	b.save()
 
-	go b.executeTask(id, content)
+	go b.executeTask(id, content, convID)
 
 	return task, nil
 }
 
-func (b *Butler) executeTask(id, content string) {
+func (b *Butler) executeTask(id, content string, convID string) {
 	b.updateStatus(id, TaskStatusRunning, "")
 
 	// Use vibeaura for intelligence
 	cmd := exec.Command("vibeaura", "direct", "--non-interactive", content)
 	out, err := cmd.CombinedOutput()
 
+	result := string(out)
 	if err != nil {
-		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error: %v\nOutput: %s", err, string(out)))
-		return
+		result = fmt.Sprintf("Error: %v\nOutput: %s", err, string(out))
+		b.updateStatus(id, TaskStatusFailed, result)
+	} else {
+		b.updateStatus(id, TaskStatusCompleted, result)
 	}
 
-	b.updateStatus(id, TaskStatusCompleted, string(out))
+	// Record result in history if convID is provided
+	if convID != "" {
+		_ = b.History.AddMessage(convID, "assistant", result)
+	}
 }
 
 func (b *Butler) updateStatus(id string, status TaskStatus, result string) {
