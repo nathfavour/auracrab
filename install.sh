@@ -48,41 +48,25 @@ fi
 mkdir -p "$INSTALL_DIR" 2>/dev/null || true
 
 # --- Intelligent Update Detection ---
-echo "Fetching remote metadata..."
+echo "Checking for updates..."
 REMOTE_SHA=""
 LATEST_TAG=""
 
 if command -v git >/dev/null 2>&1; then
     # Try to get the latest commit SHA of master
     REMOTE_SHA=$(git ls-remote "$GITHUB_URL.git" HEAD | awk '{print $1}')
-    # Also try to find a 'latest' tag or the newest semver tag
-    ALL_TAGS=$(git ls-remote --tags "$GITHUB_URL.git" | cut -d/ -f3)
-    if echo "$ALL_TAGS" | grep -q "^latest$"; then
-        LATEST_TAG="latest"
-    else
-        LATEST_TAG=$(echo "$ALL_TAGS" | grep -E "^v[0-9]" | sort -V | tail -n 1)
-    fi
 fi
 
-# Check existing installation
 UP_TO_DATE=false
 if command -v auracrab >/dev/null 2>&1; then
-    # We use 'auracrab version' to extract current commit and version
-    # Note: Using 'version --template' or similar if available, but here we'll grep
-    LOCAL_INFO=$(auracrab version 2>/dev/null || true)
-    LOCAL_VERSION=$(echo "$LOCAL_INFO" | grep -oE "v[0-9]+\.[0-9]+\.[0-9]+" | head -n 1 || true)
-    LOCAL_COMMIT=$(echo "$LOCAL_INFO" | grep -oE "commit: [0-9a-f]+" | awk '{print $2}' || true)
-
+    LOCAL_COMMIT=$(auracrab version --short-commit 2>/dev/null || true)
     if [ -n "$REMOTE_SHA" ] && [ "$LOCAL_COMMIT" = "${REMOTE_SHA:0:7}" ]; then
-        UP_TO_DATE=true
-    elif [ -n "$LATEST_TAG" ] && [ "$LOCAL_VERSION" = "$LATEST_TAG" ]; then
         UP_TO_DATE=true
     fi
 fi
 
 if [ "$UP_TO_DATE" = "true" ]; then
-    echo "Auracrab is already up to date."
-    # Still ensure dependencies
+    echo "Auracrab is already up to date (${REMOTE_SHA:0:7})."
 else
     # --- Intelligent Build-from-Source Detection ---
     BUILD_FROM_SOURCE=false
@@ -102,9 +86,17 @@ else
 
     if [ "$BUILD_FROM_SOURCE" = "true" ]; then
         # Check if we are already in the auracrab source directory
-        if [ -f "go.mod" ] && grep -q "github.com/nathfavour/auracrab" go.mod; then
-            echo "Current directory is auracrab source. Updating..."
-            git pull origin master || true
+        if [ -f "go.mod" ] && grep -q "github.com/nathfavour/auracrab" go.mod;
+ then
+            echo "Current directory is auracrab source."
+            # Only pull if changes actually exist remotely
+            if [ -n "$REMOTE_SHA" ]; then
+                LOCAL_REPO_SHA=$(git rev-parse HEAD)
+                if [ "$LOCAL_REPO_SHA" != "$REMOTE_SHA" ]; then
+                    echo "Updating local repository..."
+                    git pull origin master || true
+                fi
+            fi
             SRC_DIR="$PWD"
             CLEANUP=false
         else
@@ -140,7 +132,6 @@ else
         fi
     else
         echo "Installing from binary..."
-        # ... binary install logic ...
         LATEST_TAG_RELEASE=$(curl -fsSL "https://api.github.com/repos/$AURACRAB_REPO/releases/latest" 2>/dev/null | grep -oE '"tag_name": *"[^"]+"' | head -n 1 | cut -d'"' -f4 || echo "latest")
         
         BINARY_NAME="auracrab-${OS}-${ARCH}"
@@ -159,6 +150,7 @@ else
             sudo mv auracrab_tmp "$INSTALL_DIR/auracrab"
         fi
     fi
+    echo "Successfully installed auracrab to $INSTALL_DIR/auracrab"
 fi
 
 # --- Ensure vibeauracle is installed ---
@@ -167,10 +159,8 @@ if ! command -v vibeaura >/dev/null 2>&1; then
     curl -fsSL "https://raw.githubusercontent.com/$VIBEAURACLE_REPO/release/install.sh" | bash
 else
     # Vibeauracle installer already handles its own up-to-date checks
-    curl -fsSL "https://raw.githubusercontent.com/$VIBEAURACLE_REPO/release/install.sh" | bash
+    curl -fsSL "https://raw.githubusercontent.com/$VIBEAURACLE_REPO/release/install.sh" | bash > /dev/null 2>&1
 fi
-
-echo "Successfully installed auracrab to $INSTALL_DIR/auracrab"
 
 # Add to PATH if necessary
 SHELL_RC=""
@@ -178,7 +168,8 @@ SHELL_RC=""
 [ -f "$HOME/.bashrc" ] && [ -z "$SHELL_RC" ] && SHELL_RC="$HOME/.bashrc"
 
 if [ -n "$SHELL_RC" ]; then
-    if ! grep -q "$INSTALL_DIR" "$SHELL_RC" 2>/dev/null; then
+    if ! grep -q "$INSTALL_DIR" "$SHELL_RC" 2>/dev/null;
+ then
         echo "" >> "$SHELL_RC"
         echo "# auracrab path" >> "$SHELL_RC"
         echo "export PATH=\"
@@ -187,4 +178,4 @@ $PATH:$INSTALL_DIR\"" >> "$SHELL_RC"
     fi
 fi
 
-echo "Installation complete. Run 'auracrab start' to begin."
+echo "Done. Run 'auracrab start' to begin."
