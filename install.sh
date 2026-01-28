@@ -32,18 +32,28 @@ fi
 
 echo "Detected Platform: $OS/$ARCH"
 
-# Install Directory
-if [ "$OS" = "android" ]; then
-    INSTALL_DIR="$HOME/bin"
+# --- Install Directory Discovery ---
+EXISTING_AURACRAB=""
+if command -v auracrab >/dev/null 2>&1; then
+    EXISTING_AURACRAB=$(command -v auracrab)
+fi
+
+if [ -n "$EXISTING_AURACRAB" ]; then
+    INSTALL_DIR=$(dirname "$EXISTING_AURACRAB")
 else
-    if [ -n "$GOPATH" ]; then
-        INSTALL_DIR="$GOPATH/bin"
-    elif [ -d "$HOME/go/bin" ]; then
-        INSTALL_DIR="$HOME/go/bin"
-    elif [ -d "$HOME/.local/bin" ]; then
-        INSTALL_DIR="$HOME/.local/bin"
+    if [ "$OS" = "android" ]; then
+        INSTALL_DIR="$HOME/bin"
     else
-        INSTALL_DIR="/usr/local/bin"
+        # Prioritize .local/bin as per modern standards
+        if [ -d "$HOME/.local/bin" ]; then
+            INSTALL_DIR="$HOME/.local/bin"
+        elif [ -n "$GOPATH" ]; then
+            INSTALL_DIR="$GOPATH/bin"
+        elif [ -d "$HOME/go/bin" ]; then
+            INSTALL_DIR="$HOME/go/bin"
+        else
+            INSTALL_DIR="/usr/local/bin"
+        fi
     fi
 fi
 
@@ -58,7 +68,7 @@ if command -v git >/dev/null 2>&1; then
 fi
 
 UP_TO_DATE=false
-if command -v auracrab >/dev/null 2>&1; then
+if [ -n "$EXISTING_AURACRAB" ]; then
     LOCAL_COMMIT=$(auracrab version --short-commit 2>/dev/null || true)
     if [ -n "$REMOTE_SHA" ] && [ "$LOCAL_COMMIT" = "${REMOTE_SHA:0:7}" ]; then
         UP_TO_DATE=true
@@ -66,7 +76,7 @@ if command -v auracrab >/dev/null 2>&1; then
 fi
 
 if [ "$UP_TO_DATE" = "true" ]; then
-    echo "Auracrab is already up to date (${REMOTE_SHA:0:7})."
+    echo "Auracrab is already up to date (${REMOTE_SHA:0:7}) at $EXISTING_AURACRAB."
 else
     # --- Build from Source Pipeline ---
     BUILD_FROM_SOURCE=false
