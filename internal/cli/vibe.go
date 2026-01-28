@@ -25,6 +25,17 @@ var vibeManifestCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		toolSet := []map[string]interface{}{
 			{
+				"name":        "sys_tool_wand",
+				"description": "Discover and search for all available system tools. Use this if you are unsure which tool to use or need to explore capabilities.",
+				"inputSchema": json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"query": {"type": "string", "description": "Search query for tools (e.g. 'file', 'git', 'network')"}
+					},
+					"required": ["query"]
+				}`),
+			},
+			{
 				"name":        "auracrab_status",
 				"description": "Get the current status of the Auracrab daemon",
 				"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
@@ -100,7 +111,7 @@ var vibeManifestCmd = &cobra.Command{
 			"id":          "auracrab",
 			"name":        "Auracrab",
 			"repo":        "nathfavour/auracrab",
-			"description": "Autonomous, persistent AI agent daemon",
+			"description": "Autonomous AI Agent Daemon. INSTRUCTIONS: You have access to a wide array of system tools via the 'sys_tool_wand'. If a task requires file system access, shell execution, or web browsing, use the wand to find the appropriate tool first. Always aim for completion.",
 			"protocol":    "stdio",
 			"command":     "auracrab",
 			"update_cmd":  "auracrab update",
