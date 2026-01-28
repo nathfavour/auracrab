@@ -185,6 +185,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "esc":
+			if m.isConfiguring {
+				m.isConfiguring = false
+				m.lastResponse = "Setup cancelled."
+				m.input.EchoMode = textinput.EchoNormal
+				m.input.Placeholder = "Enter task or /command..."
+				m.input.SetValue("")
+				return m, tea.Batch(cmds...)
+			}
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
@@ -213,6 +222,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Always enable if setting up
 					_ = v.Set(strings.ToUpper(m.configuringFor)+"_ENABLED", "true")
 					
+					m.configValues = make(map[string]string) // Clear sensitive values from memory
 					m.lastResponse = fmt.Sprintf("✅ Setup for %s completed. Restart the daemon to apply changes.", m.configuringFor)
 					m.input.Placeholder = "Enter task or /command..."
 				} else {
@@ -224,7 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.lastResponse = nextStep.question
 				}
-				return m, nil
+				return m, tea.Batch(cmds...)
 			}
 
 			if m.input.Value() != "" {
@@ -233,6 +243,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if strings.HasPrefix(val, "/") {
 					return m.handleCommand(val)
+				}
+
+				// Proactive check for module setup
+				v := vault.GetVault()
+				lowerVal := strings.ToLower(val)
+				if strings.Contains(lowerVal, "telegram") && (strings.Contains(lowerVal, "init") || strings.Contains(lowerVal, "setup") || strings.Contains(lowerVal, "configure") || strings.Contains(lowerVal, "start")) {
+					token, _ := v.Get("TELEGRAM_TOKEN")
+					if token == "" {
+						return m.handleSetupCommand("telegram")
+					}
+				} else if strings.Contains(lowerVal, "discord") && (strings.Contains(lowerVal, "init") || strings.Contains(lowerVal, "setup") || strings.Contains(lowerVal, "configure") || strings.Contains(lowerVal, "start")) {
+					token, _ := v.Get("DISCORD_TOKEN")
+					if token == "" {
+						return m.handleSetupCommand("discord")
+					}
 				}
 
 				// Start as task
@@ -259,6 +284,12 @@ func (m Model) handleCommand(input string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.handleConfigCommand(parts[1:])
+	case "/setup":
+		if len(parts) < 2 {
+			m.lastResponse = "Usage: /setup [telegram|discord]"
+			return m, nil
+		}
+		return m.handleSetupCommand(parts[1])
 	case "/shot":
 		return m.takeScreenshot()
 	case "/exit", "/quit":
@@ -268,6 +299,56 @@ func (m Model) handleCommand(input string) (tea.Model, tea.Cmd) {
 	default:
 		m.lastResponse = "Unknown command: " + cmd
 	}
+	return m, nil
+}
+
+func (m Model) handleSetupCommand(module string) (tea.Model, tea.Cmd) {
+	m.configuringFor = strings.ToLower(module)
+	m.isConfiguring = true
+	m.currentStep = 0
+	m.configValues = make(map[string]string)
+
+	switch m.configuringFor {
+	case "telegram":
+		m.configSteps = []configStep{
+			{
+				question:    "Enter your Telegram Bot Token:",
+				vaultKey:    "TELEGRAM_TOKEN",
+				placeholder: "123456:ABC-DEF...",
+				sensitive:   true,
+			},
+			{
+				question:    "Enter Allowed Chat IDs (comma-separated, optional):",
+				vaultKey:    "TELEGRAM_ALLOWED_CHATS",
+				placeholder: "12345678,98765432",
+				sensitive:   false,
+			},
+		}
+	case "discord":
+		m.configSteps = []configStep{
+			{
+				question:    "Enter your Discord Bot Token:",
+				vaultKey:    "DISCORD_TOKEN",
+				placeholder: "OTY...",
+				sensitive:   true,
+			},
+		}
+	default:
+		m.isConfiguring = false
+		m.lastResponse = "Unknown module for setup: " + module
+		return m, nil
+	}
+
+	firstStep := m.configSteps[0]
+	m.lastResponse = "🔒 Configuration Mode - " + firstStep.question
+	m.input.Placeholder = firstStep.placeholder
+	if firstStep.sensitive {
+		m.input.EchoMode = textinput.EchoPassword
+	} else {
+		m.input.EchoMode = textinput.EchoNormal
+	}
+	m.input.SetValue("")
+
 	return m, nil
 }
 
@@ -398,10 +479,19 @@ func (m Model) View() string {
 	// Footer: Input & Status
 	view.WriteString("\n\n")
 	if m.lastResponse != "" {
-		view.WriteString(styleStatus.Render(m.lastResponse) + "\n")
+		if m.isConfiguring {
+			view.WriteString(lipgloss.NewStyle().Foreground(purple).Bold(true).Render(" 🔒 CONFIG MODE: ") + m.lastResponse + "\n")
+		} else {
+			view.WriteString(styleStatus.Render(m.lastResponse) + "\n")
+		}
 	}
 	view.WriteString(styleInput.Render(m.input.View()))
-	view.WriteString(styleFooter.Render("\n[↑/↓] Navigate • [Enter] Submit • [/shot] Screenshot • [/config] Config • [Ctrl+C] Quit"))
+
+	if m.isConfiguring {
+		view.WriteString(styleFooter.Render("\n[Enter] Confirm Step • [Ctrl+C] Cancel Setup"))
+	} else {
+		view.WriteString(styleFooter.Render("\n[↑/↓] Navigate • [Enter] Submit • [/shot] Screenshot • [/config] Config • [/setup] Setup • [Ctrl+C] Quit"))
+	}
 
 	return view.String()
 }
