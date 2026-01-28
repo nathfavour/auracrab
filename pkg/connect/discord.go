@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/vault"
 )
 
@@ -14,6 +15,7 @@ import (
 type DiscordChannel struct {
 	Token   string
 	session *discordgo.Session
+	history *memory.HistoryStore
 }
 
 func (d *DiscordChannel) Name() string {
@@ -21,6 +23,12 @@ func (d *DiscordChannel) Name() string {
 }
 
 func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, text string) string) error {
+	var err error
+	d.history, err = memory.NewHistoryStore()
+	if err != nil {
+		log.Printf("Warning: Discord could not initialize history store: %v", err)
+	}
+
 	dg, err := discordgo.New("Bot " + d.Token)
 	if err != nil {
 		return fmt.Errorf("error creating Discord session: %v", err)
@@ -46,17 +54,26 @@ func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, 
 		}
 
 		v := vault.GetVault()
-		allowedChannels, _ := v.Get("DISCORD_ALLOWED_CHANNELS")
-
+		
 		isAllowed := false
-		if allowedChannels == "" {
-			isAllowed = true
-		} else {
-			for _, idStr := range strings.Split(allowedChannels, ",") {
-				if strings.TrimSpace(idStr) == m.ChannelID {
-					isAllowed = true
-					break
+		if d.history != nil {
+			isAllowed, _ = d.history.IsAuthorized("discord", m.ChannelID)
+		}
+
+		if !isAllowed {
+			allowedChannels, _ := v.Get("DISCORD_ALLOWED_CHANNELS")
+			if allowedChannels != "" {
+				for _, idStr := range strings.Split(allowedChannels, ",") {
+					if strings.TrimSpace(idStr) == m.ChannelID {
+						isAllowed = true
+						if d.history != nil {
+							_ = d.history.AuthorizeEntity("discord", m.ChannelID)
+						}
+						break
+					}
 				}
+			} else {
+				isAllowed = false
 			}
 		}
 

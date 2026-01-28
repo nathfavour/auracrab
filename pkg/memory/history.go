@@ -63,12 +63,46 @@ func NewHistoryStore() (*HistoryStore, error) {
 		PRIMARY KEY(platform, platform_id),
 		FOREIGN KEY(conversation_id) REFERENCES conversations(id)
 	);
+	CREATE TABLE IF NOT EXISTS authorized_entities (
+		platform TEXT,
+		platform_id TEXT,
+		authorized_at DATETIME,
+		PRIMARY KEY(platform, platform_id)
+	);
 	`
 	if _, err := db.Exec(query); err != nil {
 		return nil, fmt.Errorf("failed to initialize history tables: %v", err)
 	}
 
 	return &HistoryStore{db: db}, nil
+}
+
+// IsAuthorized checks if a platform ID is authorized to interact with the bot.
+func (h *HistoryStore) IsAuthorized(platform, platformID string) (bool, error) {
+	var exists bool
+	err := h.db.QueryRow(
+		"SELECT EXISTS(SELECT 1 FROM authorized_entities WHERE platform = ? AND platform_id = ?)",
+		platform, platformID,
+	).Scan(&exists)
+	return exists, err
+}
+
+// AuthorizeEntity marks a platform ID as authorized.
+func (h *HistoryStore) AuthorizeEntity(platform, platformID string) error {
+	_, err := h.db.Exec(
+		"INSERT OR REPLACE INTO authorized_entities (platform, platform_id, authorized_at) VALUES (?, ?, ?)",
+		platform, platformID, time.Now(),
+	)
+	return err
+}
+
+// DeauthorizeEntity removes authorization for a platform ID.
+func (h *HistoryStore) DeauthorizeEntity(platform, platformID string) error {
+	_, err := h.db.Exec(
+		"DELETE FROM authorized_entities WHERE platform = ? AND platform_id = ?",
+		platform, platformID,
+	)
+	return err
 }
 
 // GetOrCreateConversationForPlatform retrieves an existing conversation UUID or creates a new one for a platform (e.g., "telegram") and platform-specific ID (e.g., chatID).

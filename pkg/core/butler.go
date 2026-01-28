@@ -136,7 +136,13 @@ func (b *Butler) handleChannelMessage(from string, text string) string {
 		if len(parts) > 1 {
 			crabID := strings.TrimPrefix(parts[0], "@")
 			if c, err := b.registry.Get(crabID); err == nil {
-				reply := fmt.Sprintf("[%s] Delegating to agent '%s': %s", from, c.Name, parts[1])
+				// Start task with crab's specialized instructions
+				augmentedTask := fmt.Sprintf("CRAB AGENT: %s\nINSTRUCTIONS: %s\n\nUSER TASK: %s", c.Name, c.Instructions, parts[1])
+				task, err := b.StartTask(context.Background(), augmentedTask, convID)
+				if err != nil {
+					return fmt.Sprintf("Error starting delegated task: %v", err)
+				}
+				reply := fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
 				if err == nil {
 					_ = b.History.AddMessage(convID, "assistant", reply)
 				}
@@ -151,7 +157,6 @@ func (b *Butler) handleChannelMessage(from string, text string) string {
 	}
 
 	reply := fmt.Sprintf("Task started (ID: %s). Content: %s", task.ID, text)
-	// We don't record "Task started" in history as a message, we wait for the actual result from executeTask
 	return reply
 }
 
@@ -195,8 +200,10 @@ func (b *Butler) StartTask(ctx context.Context, content string, convID string) (
 func (b *Butler) executeTask(id, content string, convID string) {
 	b.updateStatus(id, TaskStatusRunning, "")
 
-	// Use vibeaura for intelligence
-	cmd := exec.Command("vibeaura", "direct", "--non-interactive", content)
+	// Use vibeaura for intelligence.
+	// We remove --non-interactive to allow it to run the full agentic loop 
+	// until the goal is achieved.
+	cmd := exec.Command("vibeaura", "direct", content)
 	out, err := cmd.CombinedOutput()
 
 	result := string(out)

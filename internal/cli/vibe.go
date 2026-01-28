@@ -61,6 +61,17 @@ var vibeManifestCmd = &cobra.Command{
 			},
 		}
 
+		// Add registered Crabs as specialized tools
+		reg, _ := crabs.NewRegistry()
+		crabList, _ := reg.List()
+		for _, c := range crabList {
+			toolSet = append(toolSet, map[string]interface{}{
+				"name":        "auracrab_delegate_" + c.ID,
+				"description": fmt.Sprintf("Delegate a task to specialized agent '%s': %s", c.Name, c.Description),
+				"inputSchema": json.RawMessage(`{"type":"object","properties":{"task":{"type":"string","description":"Task for the agent"}}}`),
+			})
+		}
+
 		// Add dynamic skills
 		v := vault.GetVault()
 		for _, s := range skills.GetRegistry().List() {
@@ -72,10 +83,16 @@ var vibeManifestCmd = &cobra.Command{
 			var manifestMap map[string]interface{}
 			_ = json.Unmarshal(s.Manifest(), &manifestMap)
 
+			// Extract properties from the manifest's parameters
+			inputSchema := manifestMap["parameters"]
+			if inputSchema == nil {
+				inputSchema = json.RawMessage(`{"type":"object","properties":{}}`)
+			}
+
 			toolSet = append(toolSet, map[string]interface{}{
 				"name":        s.Name(),
 				"description": s.Description(),
-				"inputSchema": manifestMap["parameters"],
+				"inputSchema": inputSchema,
 			})
 		}
 
@@ -129,11 +146,11 @@ var executeCmd = &cobra.Command{
 			return
 		}
 
-		switch toolName {
-		case "auracrab_status":
+		switch {
+		case toolName == "auracrab_status":
 			status := butler.GetStatus()
 			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", status)
-		case "auracrab_start_task":
+		case toolName == "auracrab_start_task":
 			var params struct {
 				Task string `json:"task"`
 			}
@@ -147,14 +164,14 @@ var executeCmd = &cobra.Command{
 				return
 			}
 			fmt.Printf(`{"content": "Task started: %s (ID: %s)", "status": "success"}`+"\n", params.Task, task.ID)
-		case "auracrab_list_tasks":
+		case toolName == "auracrab_list_tasks":
 			tasks := butler.ListTasks()
 			data, _ := json.Marshal(tasks)
 			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", string(data))
-		case "auracrab_watch_health":
+		case toolName == "auracrab_watch_health":
 			health := butler.WatchHealth()
 			fmt.Printf(`{"content": %q, "status": "success"}`+"\n", health)
-		case "auracrab_register_crab":
+		case toolName == "auracrab_register_crab":
 			var crab crabs.Crab
 			if len(args) > 1 {
 				if err := json.Unmarshal([]byte(args[1]), &crab); err != nil {
@@ -172,6 +189,26 @@ var executeCmd = &cobra.Command{
 				return
 			}
 			fmt.Printf(`{"content": "Crab '%s' registered successfully.", "status": "success"}`+"\n", crab.Name)
+		case strings.HasPrefix(toolName, "auracrab_delegate_"):
+			crabID := strings.TrimPrefix(toolName, "auracrab_delegate_")
+			var params struct {
+				Task string `json:"task"`
+			}
+			if len(args) > 1 {
+				_ = json.Unmarshal([]byte(args[1]), &params)
+			}
+
+			reg, _ := crabs.NewRegistry()
+			crab, err := reg.Get(crabID)
+			if err != nil {
+				fmt.Printf(`{"content": "Error finding crab: %v", "status": "error"}`+"\n", err)
+				return
+			}
+
+			// For delegation, we actually start a nested task or just return instructions.
+			// Ideally, we want vibeauracle to continue with the crab's instructions.
+			fmt.Printf(`{"content": "Agent %s instructions: %s. Context: %s", "status": "success"}`+"\n", crab.Name, crab.Instructions, params.Task)
+
 		default:
 			fmt.Printf("Unknown tool: %s\n", toolName)
 			os.Exit(1)

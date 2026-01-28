@@ -11,6 +11,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/nathfavour/auracrab/pkg/vault"
+	"github.com/nathfavour/auracrab/pkg/memory"
 )
 
 // TelegramChannel is a real Telegram integration using long-polling.
@@ -18,6 +19,7 @@ type TelegramChannel struct {
 	Token    string
 	offset   int
 	stateDir string
+	history  *memory.HistoryStore
 }
 
 func (t *TelegramChannel) Name() string {
@@ -30,6 +32,14 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 	_ = os.MkdirAll(t.stateDir, 0755)
 
 	t.loadOffset()
+
+	// Initialize history store reference (Butler will have it, but we can get it or New it)
+	// For simplicity, we use the global history file
+	var err error
+	t.history, err = memory.NewHistoryStore()
+	if err != nil {
+		log.Printf("Warning: Telegram could not initialize history store: %v", err)
+	}
 
 	bot, err := tgbotapi.NewBotAPI(t.Token)
 	if err != nil {
@@ -70,20 +80,36 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 				}
 
 				chatID := update.Message.Chat.ID
+				chatIDStr := fmt.Sprintf("%d", chatID)
 				v := vault.GetVault()
-				allowedChats, _ := v.Get("TELEGRAM_ALLOWED_CHATS")
 				
+				// Check Database authorization first
 				isAllowed := false
-				if allowedChats == "" {
-					// If none configured, allow but log a warning (or we could default to private only?)
-					// Let's default to allowing but providing a way to lock it down.
-					isAllowed = true
-				} else {
-					for _, idStr := range strings.Split(allowedChats, ",") {
-						if strings.TrimSpace(idStr) == fmt.Sprintf("%d", chatID) {
-							isAllowed = true
-							break
+				if t.history != nil {
+					isAllowed, _ = t.history.IsAuthorized("telegram", chatIDStr)
+				}
+
+				// Fallback to Vault whitelist if not explicitly in DB
+				if !isAllowed {
+					allowedChats, _ := v.Get("TELEGRAM_ALLOWED_CHATS")
+					if allowedChats != "" {
+						for _, idStr := range strings.Split(allowedChats, ",") {
+							if strings.TrimSpace(idStr) == chatIDStr {
+								isAllowed = true
+								// Persist to DB for faster lookup next time
+								if t.history != nil {
+									_ = t.history.AuthorizeEntity("telegram", chatIDStr)
+								}
+								break
+							}
 						}
+					} else {
+						// If nothing configured at all, we might want to be strict
+						// but for now, let's keep the user's "allowed to message" requirement.
+						// We'll default to false if any TELEGRAM_ALLOWED_CHATS is set, 
+						// or true if it's completely fresh (to avoid locking users out immediately).
+						// But with the "no DM first" reminder, let's be more careful.
+						isAllowed = false 
 					}
 				}
 
@@ -98,11 +124,11 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 						bot.Send(msg)
 						continue
 					case "/start":
-						msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Telegram Bot*\n\nI am your autonomous agent. Send me tasks or delegate to specific crabs using @crabname.\n\nCommands:\n/id - Show Chat ID\n/status - Show daemon status\n/help - Show this help")
+						msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Telegram Bot*\n\nI am your autonomous agent. I follow a strict 'No DM first' policy. Please authorize this chat in the TUI to continue.\n\nCommands:\n/id - Show Chat ID\n/status - Show daemon status\n/help - Show this help")
 						msg.ParseMode = "Markdown"
 						bot.Send(msg)
 						if !isAllowed {
-							warn := tgbotapi.NewMessage(chatID, "⚠️ This chat is not in the allowed list. Your messages will be ignored until this Chat ID is added to `TELEGRAM_ALLOWED_CHATS`.")
+							warn := tgbotapi.NewMessage(chatID, fmt.Sprintf("⚠️ This chat (%d) is not authorized. Your messages will be ignored.", chatID))
 							bot.Send(warn)
 						}
 						continue
