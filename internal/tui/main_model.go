@@ -85,18 +85,31 @@ var (
 type tickMsg time.Time
 
 type Model struct {
-	tasks        []*core.Task
-	cursor       int
-	statusMsg    string
-	healthMsg    string
-	skillsList   []string
-	width        int
-	height       int
-	ready        bool
-	input        textinput.Model
-	banner       string
-	lastResponse string
-	isCapturing  bool
+	tasks          []*core.Task
+	cursor         int
+	statusMsg      string
+	healthMsg      string
+	skillsList     []string
+	width          int
+	height         int
+	ready          bool
+	input          textinput.Model
+	banner         string
+	lastResponse   string
+	isCapturing    bool
+	// Config mode fields
+	isConfiguring  bool
+	configSteps    []configStep
+	currentStep    int
+	configValues   map[string]string
+	configuringFor string
+}
+
+type configStep struct {
+	question    string
+	vaultKey    string
+	placeholder string
+	sensitive   bool
 }
 
 func InitialModel() Model {
@@ -118,11 +131,12 @@ func InitialModel() Model {
 	}
 
 	return Model{
-		tasks:      butler.ListTasks(),
-		statusMsg:  butler.GetStatus(),
-		healthMsg:  butler.WatchHealth(),
-		skillsList: skillNames,
-		input:      ti,
+		tasks:        butler.ListTasks(),
+		statusMsg:    butler.GetStatus(),
+		healthMsg:    butler.WatchHealth(),
+		skillsList:   skillNames,
+		input:        ti,
+		configValues: make(map[string]string),
 	}
 }
 
@@ -180,6 +194,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
+			if m.isConfiguring {
+				val := m.input.Value()
+				m.input.SetValue("")
+				m.input.EchoMode = textinput.EchoNormal
+
+				step := m.configSteps[m.currentStep]
+				m.configValues[step.vaultKey] = val
+
+				m.currentStep++
+				if m.currentStep >= len(m.configSteps) {
+					// Finish setup
+					m.isConfiguring = false
+					v := vault.GetVault()
+					for k, vStr := range m.configValues {
+						_ = v.Set(k, vStr)
+					}
+					// Always enable if setting up
+					_ = v.Set(strings.ToUpper(m.configuringFor)+"_ENABLED", "true")
+					
+					m.lastResponse = fmt.Sprintf("✅ Setup for %s completed. Restart the daemon to apply changes.", m.configuringFor)
+					m.input.Placeholder = "Enter task or /command..."
+				} else {
+					// Next step
+					nextStep := m.configSteps[m.currentStep]
+					m.input.Placeholder = nextStep.placeholder
+					if nextStep.sensitive {
+						m.input.EchoMode = textinput.EchoPassword
+					}
+					m.lastResponse = nextStep.question
+				}
+				return m, nil
+			}
+
 			if m.input.Value() != "" {
 				val := m.input.Value()
 				m.input.SetValue("")
