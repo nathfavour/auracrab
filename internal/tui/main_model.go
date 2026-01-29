@@ -97,6 +97,7 @@ type Model struct {
 	banner         string
 	lastResponse   string
 	isCapturing    bool
+	updateStatus   string
 	// History fields
 	commandHistory []string
 	historyIndex   int
@@ -182,6 +183,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.skillsList = skillNames
+
+		// Check for background updates
+		availFile := filepath.Join(config.DataDir(), ".update_available")
+		completeFile := filepath.Join(config.DataDir(), ".update_complete")
+
+		if _, err := os.Stat(completeFile); err == nil {
+			m.updateStatus = "✨ Update completed! Restart required."
+		} else if _, err := os.ReadFile(availFile); err == nil {
+			m.updateStatus = "✨ Update downloading in background..."
+		} else {
+			m.updateStatus = ""
+		}
 
 		return m, tick()
 
@@ -501,6 +514,10 @@ func (m Model) View() string {
 
 	sidebar.WriteString("Health: " + healthStyle.Render(m.healthMsg) + "\n\n")
 	sidebar.WriteString("Status: " + m.statusMsg + "\n\n")
+
+	if m.updateStatus != "" {
+		sidebar.WriteString(lipgloss.NewStyle().Foreground(green).Bold(true).Render(m.updateStatus) + "\n\n")
+	}
 
 	sidebar.WriteString(styleSectionTitle.Render("LOADED SKILLS") + "\n")
 	for _, s := range m.skillsList {

@@ -200,16 +200,11 @@ func (b *Butler) StartTask(ctx context.Context, content string, convID string) (
 func (b *Butler) executeTask(id, content string, convID string) {
 	b.updateStatus(id, TaskStatusRunning, "")
 
-	// Ensure vibeaura is in 'vibe' mode for tool access.
-	// We do this by patching the config file since the binary might not support flags.
-	home, _ := os.UserHomeDir()
-	configPath := filepath.Join(home, ".vibeauracle", "config.yaml")
-	_ = exec.Command("sed", "-i", "s/mode: sdk/mode: vibe/g", configPath).Run()
-
 	// Use vibeaura for intelligence.
 	// We remove --non-interactive to allow it to run the full agentic loop 
 	// until the goal is achieved.
-	cmd := exec.Command("vibeaura", "direct", content)
+	// Use the --agent flag we just added to force vibe mode for tool access.
+	cmd := exec.Command("vibeaura", "direct", "--agent", "vibe", content)
 	out, err := cmd.CombinedOutput()
 
 	result := string(out)
