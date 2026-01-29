@@ -5,6 +5,12 @@ import (
 	"path/filepath"
 )
 
+var (
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
+)
+
 // DataDir returns the path to the auracrab data directory (~/.auracrab)
 func DataDir() string {
 	home, _ := os.UserHomeDir()

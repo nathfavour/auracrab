@@ -80,6 +80,15 @@ var (
 			Italic(true).
 			Foreground(gray).
 			MarginLeft(2)
+
+	allCommands = []string{
+		"/config", "/setup", "/shot", "/exit", "/quit", "/help", "/version", "/update", "/clear", "/status", "/restart",
+	}
+
+	subCommands = map[string][]string{
+		"/config": {"list", "set", "get", "toggle"},
+		"/setup":  {"telegram", "discord"},
+	}
 )
 
 type tickMsg time.Time
@@ -101,6 +110,9 @@ type Model struct {
 	// History fields
 	commandHistory []string
 	historyIndex   int
+	// Suggestion fields
+	suggestions    []string
+	suggestionIdx  int
 	// Config mode fields
 	isConfiguring  bool
 	configSteps    []configStep
@@ -155,6 +167,64 @@ func tick() tea.Cmd {
 	})
 }
 
+func (m *Model) updateSuggestions() {
+	val := m.input.Value()
+	if !strings.HasPrefix(val, "/") || m.isConfiguring {
+		m.suggestions = nil
+		return
+	}
+
+	parts := strings.Split(val, " ")
+	if len(parts) == 1 {
+		// Top level commands
+		var filtered []string
+		for _, cmd := range allCommands {
+			if strings.HasPrefix(cmd, parts[0]) {
+				filtered = append(filtered, cmd)
+			}
+		}
+		m.suggestions = filtered
+	} else if len(parts) == 2 {
+		// Subcommands
+		parent := parts[0]
+		if subs, ok := subCommands[parent]; ok {
+			var filtered []string
+			for _, sub := range subs {
+				if strings.HasPrefix(sub, parts[1]) {
+					filtered = append(filtered, sub)
+				}
+			}
+			m.suggestions = filtered
+		} else {
+			m.suggestions = nil
+		}
+	} else {
+		m.suggestions = nil
+	}
+
+	if m.suggestionIdx >= len(m.suggestions) {
+		m.suggestionIdx = 0
+	}
+}
+
+func (m *Model) applySuggestion() {
+	if len(m.suggestions) == 0 {
+		return
+	}
+
+	suggestion := m.suggestions[m.suggestionIdx]
+	val := m.input.Value()
+	parts := strings.Split(val, " ")
+
+	if len(parts) == 1 {
+		m.input.SetValue(suggestion + " ")
+	} else if len(parts) == 2 {
+		m.input.SetValue(parts[0] + " " + suggestion + " ")
+	}
+	m.input.CursorEnd()
+	m.updateSuggestions()
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
@@ -202,7 +272,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "tab":
+			if len(m.suggestions) > 0 {
+				m.applySuggestion()
+				return m, nil
+			}
+		case "shift+tab":
+			if len(m.suggestions) > 0 {
+				m.suggestionIdx = (m.suggestionIdx - 1 + len(m.suggestions)) % len(m.suggestions)
+				return m, nil
+			}
 		case "esc":
+			if len(m.suggestions) > 0 {
+				m.suggestions = nil
+				return m, nil
+			}
 			if m.isConfiguring {
 				m.isConfiguring = false
 				m.lastResponse = "Setup cancelled."
@@ -213,6 +297,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "up", "k":
 			if m.isConfiguring {
+				return m, nil
+			}
+			if len(m.suggestions) > 0 {
+				m.suggestionIdx = (m.suggestionIdx - 1 + len(m.suggestions)) % len(m.suggestions)
 				return m, nil
 			}
 			if len(m.commandHistory) > 0 {
@@ -232,6 +320,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.isConfiguring {
 				return m, nil
 			}
+			if len(m.suggestions) > 0 {
+				m.suggestionIdx = (m.suggestionIdx + 1) % len(m.suggestions)
+				return m, nil
+			}
 			if m.historyIndex != -1 {
 				if m.historyIndex < len(m.commandHistory)-1 {
 					m.historyIndex++
@@ -247,6 +339,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
+			if len(m.suggestions) > 0 {
+				m.applySuggestion()
+				return m, nil
+			}
 			if m.isConfiguring {
 				// ... (config logic)
 				val := m.input.Value()
@@ -321,6 +417,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.input, cmd = m.input.Update(msg)
 	cmds = append(cmds, cmd)
 
+	m.updateSuggestions()
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -343,10 +441,29 @@ func (m Model) handleCommand(input string) (tea.Model, tea.Cmd) {
 		return m.handleSetupCommand(parts[1])
 	case "/shot":
 		return m.takeScreenshot()
+	case "/version":
+		m.lastResponse = fmt.Sprintf("auracrab %s (commit: %s, built: %s)", config.Version, config.Commit, config.BuildDate)
+	case "/update":
+		// Trigger update logic
+		updateScript := "curl -fsSL https://raw.githubusercontent.com/nathfavour/auracrab/master/install.sh | bash"
+		m.lastResponse = "Checking for updates..."
+		updateCmd := exec.Command("bash", "-c", updateScript)
+		if err := updateCmd.Run(); err != nil {
+			m.lastResponse = "Update failed: " + err.Error()
+		} else {
+			m.lastResponse = "Update completed! Please restart."
+		}
+	case "/restart":
+		m.lastResponse = "Restarting..."
+		return m, tea.Quit
 	case "/exit", "/quit":
 		return m, tea.Quit
 	case "/help":
-		m.lastResponse = "Commands: /shot - Take screenshot, /config - Manage settings, /exit - Quit"
+		m.lastResponse = "Commands: /shot, /config, /setup, /version, /update, /clear, /status, /exit"
+	case "/clear":
+		m.lastResponse = ""
+	case "/status":
+		m.lastResponse = core.GetButler().GetStatus()
 	default:
 		m.lastResponse = "Unknown command: " + cmd
 	}
@@ -463,6 +580,35 @@ func (m Model) handleConfigCommand(args []string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) renderSuggestions() string {
+	if len(m.suggestions) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	suggestionStyle := lipgloss.NewStyle().
+		Foreground(gray).
+		Italic(true)
+
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(purple).
+		Bold(true).
+		Underline(true)
+
+	sb.WriteString("  ")
+	for i, s := range m.suggestions {
+		if i == m.suggestionIdx {
+			sb.WriteString(selectedStyle.Render(s))
+		} else {
+			sb.WriteString(suggestionStyle.Render(s))
+		}
+		if i < len(m.suggestions)-1 {
+			sb.WriteString("  ")
+		}
+	}
+	return sb.String() + "\n"
+}
+
 func (m Model) View() string {
 	if !m.ready {
 		return "Initializing Auracrab TUI..."
@@ -540,6 +686,8 @@ func (m Model) View() string {
 			view.WriteString(styleStatus.Render(m.lastResponse) + "\n")
 		}
 	}
+
+	view.WriteString(m.renderSuggestions())
 	view.WriteString(styleInput.Render(m.input.View()))
 
 	if m.isConfiguring {

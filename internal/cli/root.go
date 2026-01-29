@@ -15,23 +15,20 @@ import (
 
 var (
 	cfgFile string
-	Version   = "dev"
-	Commit    = "none"
-	BuildDate = "unknown"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "auracrab",
 	Short: "auracrab is a modular CLI tool",
 	Long:  `A highly modular CLI project structure built with Go and Cobra.`,
-	Version: fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, BuildDate),
+	Version: fmt.Sprintf("%s (commit: %s, built: %s)", config.Version, config.Commit, config.BuildDate),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Clean up update signals if we are now on the new version
 		availFile := filepath.Join(config.DataDir(), ".update_available")
 		completeFile := filepath.Join(config.DataDir(), ".update_complete")
 		if data, err := os.ReadFile(availFile); err == nil {
 			remoteSHA := strings.TrimSpace(string(data))
-			if strings.HasPrefix(remoteSHA, Commit) && Commit != "none" {
+			if strings.HasPrefix(remoteSHA, config.Commit) && config.Commit != "none" {
 				_ = os.Remove(availFile)
 				_ = os.Remove(completeFile)
 			}
@@ -65,7 +62,7 @@ var rootCmd = &cobra.Command{
 			}
 			
 			remoteSHA := strings.Fields(string(out))[0]
-			if len(remoteSHA) > 7 && Commit != "none" && !strings.HasPrefix(remoteSHA, Commit) {
+			if len(remoteSHA) > 7 && config.Commit != "none" && !strings.HasPrefix(remoteSHA, config.Commit) {
 				// Update available!
 				availFile := filepath.Join(config.DataDir(), ".update_available")
 				_ = os.WriteFile(availFile, []byte(remoteSHA), 0644)
