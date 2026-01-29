@@ -542,7 +542,11 @@ func (m Model) handleConfigCommand(args []string) (tea.Model, tea.Cmd) {
 			if err != nil {
 				m.lastResponse = "Error setting config: " + err.Error()
 			} else {
-				m.lastResponse = fmt.Sprintf("Config '%s' set to '%s'", args[1], args[2])
+				displayVal := args[2]
+				if strings.Contains(strings.ToUpper(args[1]), "TOKEN") || strings.Contains(strings.ToUpper(args[1]), "KEY") || strings.Contains(strings.ToUpper(args[1]), "SECRET") {
+					displayVal = vault.Mask(args[2])
+				}
+				m.lastResponse = fmt.Sprintf("Config '%s' set to '%s'", args[1], displayVal)
 			}
 		}
 	case "get":
@@ -553,7 +557,11 @@ func (m Model) handleConfigCommand(args []string) (tea.Model, tea.Cmd) {
 			if err != nil {
 				m.lastResponse = "Error getting config: " + err.Error()
 			} else {
-				m.lastResponse = fmt.Sprintf("%s: %s", args[1], val)
+				displayVal := val
+				if strings.Contains(strings.ToUpper(args[1]), "TOKEN") || strings.Contains(strings.ToUpper(args[1]), "KEY") || strings.Contains(strings.ToUpper(args[1]), "SECRET") {
+					displayVal = vault.Mask(val)
+				}
+				m.lastResponse = fmt.Sprintf("%s: %s", args[1], displayVal)
 			}
 		}
 	case "toggle":

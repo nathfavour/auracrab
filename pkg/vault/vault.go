@@ -1,13 +1,10 @@
 package vault
 
 import (
-"encoding/json"
-"fmt"
-"os"
-"sync"
+	"fmt"
+	"sync"
 
-"github.com/99designs/keyring"
-"github.com/nathfavour/auracrab/pkg/config"
+	"github.com/99designs/keyring"
 )
 
 type Vault struct {
@@ -47,19 +44,13 @@ Data: []byte(value),
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	secrets := make(map[string]string)
-	path := config.SecretsPath()
-	if data, err := os.ReadFile(path); err == nil {
-		json.Unmarshal(data, &secrets)
+	secrets, err := loadSecrets()
+	if err != nil {
+		secrets = make(map[string]string)
 	}
 
 	secrets[key] = value
-	data, err := json.MarshalIndent(secrets, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0600)
+	return saveSecrets(secrets)
 }
 
 func (v *Vault) Get(key string) (string, error) {
@@ -73,17 +64,13 @@ func (v *Vault) Get(key string) (string, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	path := config.SecretsPath()
-	data, err := os.ReadFile(path)
+	secrets, err := loadSecrets()
 	if err != nil {
 		return "", err
 	}
 
-	secrets := make(map[string]string)
-	if err := json.Unmarshal(data, &secrets); err == nil {
-		if val, ok := secrets[key]; ok {
-			return val, nil
-		}
+	if val, ok := secrets[key]; ok {
+		return val, nil
 	}
 
 	return "", fmt.Errorf("secret %s not found", key)
@@ -100,17 +87,8 @@ func (v *Vault) List() ([]string, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	path := config.SecretsPath()
-	data, err := os.ReadFile(path)
+	secrets, err := loadSecrets()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-
-	secrets := make(map[string]string)
-	if err := json.Unmarshal(data, &secrets); err != nil {
 		return nil, err
 	}
 

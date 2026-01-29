@@ -26,6 +26,8 @@ var vaultSetCmd = &cobra.Command{
 	},
 }
 
+var revealVault bool
+
 var vaultGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a secret from the vault",
@@ -37,11 +39,16 @@ var vaultGetCmd = &cobra.Command{
 			fmt.Printf("Error: %v\n", err)
 			return
 		}
-		fmt.Printf("%s: %s\n", args[0], val)
+		if revealVault {
+			fmt.Printf("%s: %s\n", args[0], val)
+		} else {
+			fmt.Printf("%s: %s\n", args[0], vault.Mask(val))
+		}
 	},
 }
 
 func init() {
+	vaultGetCmd.Flags().BoolVarP(&revealVault, "reveal", "r", false, "Reveal the secret value")
 	vaultCmd.AddCommand(vaultSetCmd)
 	vaultCmd.AddCommand(vaultGetCmd)
 	rootCmd.AddCommand(vaultCmd)
