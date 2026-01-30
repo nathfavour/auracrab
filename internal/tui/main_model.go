@@ -83,12 +83,13 @@ var (
 			MarginLeft(2)
 
 	allCommands = []string{
-		"/config", "/setup", "/shot", "/exit", "/quit", "/help", "/version", "/update", "/clear", "/status", "/restart",
+		"/config", "/setup", "/bot", "/shot", "/exit", "/quit", "/help", "/version", "/update", "/clear", "/status", "/restart",
 	}
 
 	subCommands = map[string][]string{
 		"/config": {"list", "set", "get", "toggle"},
 		"/setup":  {"telegram", "discord"},
+		"/bot":    {"list", "add"},
 	}
 )
 
@@ -459,6 +460,12 @@ func (m Model) handleCommand(input string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.handleSetupCommand(parts[1])
+	case "/bot":
+		if len(parts) < 2 {
+			m.lastResponse = "Usage: /bot [list|add <name> <token>]"
+			return m, nil
+		}
+		return m.handleBotCommand(parts[1:])
 	case "/shot":
 		return m.takeScreenshot()
 	case "/version":
