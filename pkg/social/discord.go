@@ -3,7 +3,6 @@ package social
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )

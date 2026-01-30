@@ -20,6 +20,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/nathfavour/auracrab/pkg/skills"
+	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/vault"
 )
 
@@ -610,6 +611,53 @@ func (m Model) handleConfigCommand(args []string) (tea.Model, tea.Cmd) {
 		}
 	default:
 		m.lastResponse = "Unknown config subcommand: " + sub
+	}
+
+	return m, nil
+}
+
+func (m Model) handleBotCommand(args []string) (tea.Model, tea.Cmd) {
+	bm := social.GetBotManager()
+	sub := args[0]
+
+	switch sub {
+	case "list":
+		bots := bm.ListBots()
+		if len(bots) == 0 {
+			m.lastResponse = "No bots registered."
+		} else {
+			var sb strings.Builder
+			sb.WriteString("Registered Bots:\n")
+			for _, b := range bots {
+				sb.WriteString(fmt.Sprintf("• %s [%s] (Mode: %s)\n", b.Name, b.Platform, b.Mode))
+			}
+			m.lastResponse = sb.String()
+		}
+	case "add":
+		if len(args) < 3 {
+			m.lastResponse = "Usage: /bot add <name> <token> [--platform telegram|discord]"
+		} else {
+			platform := "telegram"
+			// Check if platform is specified (simple check)
+			for i, arg := range args {
+				if (arg == "--platform" || arg == "-p") && i+1 < len(args) {
+					platform = args[i+1]
+				}
+			}
+
+			err := bm.AddBot(social.BotConfig{
+				Name:     args[1],
+				Token:    args[2],
+				Platform: platform,
+			})
+			if err != nil {
+				m.lastResponse = "Error adding bot: " + err.Error()
+			} else {
+				m.lastResponse = fmt.Sprintf("✅ Bot '%s' added successfully. Restart daemon to activate.", args[1])
+			}
+		}
+	default:
+		m.lastResponse = "Unknown bot subcommand: " + sub
 	}
 
 	return m, nil

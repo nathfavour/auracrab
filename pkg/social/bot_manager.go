@@ -1,7 +1,6 @@
 package social
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -117,7 +116,7 @@ func (bm *BotManager) UpdateBot(cfg BotConfig) error {
 	return fmt.Errorf("bot not found")
 }
 
-func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStore, onTask func(from, text, convID string) string) {
+func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStore, onTask func(from, text string) string) {
 	bm.mu.RLock()
 	bots := make([]BotConfig, len(bm.bots))
 	copy(bots, bm.bots)
@@ -128,7 +127,7 @@ func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStor
 	}
 }
 
-func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memory.HistoryStore, onTask func(from, text, convID string) string) {
+func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memory.HistoryStore, onTask func(from, text string) string) {
 	var p MessengerProvider
 	var err error
 
@@ -219,7 +218,7 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 	p.SendMessage(chatID, "Welcome, Boss. I am your Auracrab Gateway. I've registered you as my owner.", opts)
 }
 
-func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, onTask func(from, text, convID string) string) bool {
+func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, onTask func(from, text string) string) bool {
 	text := update.Text
 	chatID := update.ChatID
 
@@ -229,7 +228,7 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 		return true
 	case text == "/status":
 		p.SendAction(chatID, ActionTyping)
-		reply := onTask(fmt.Sprintf("%v", update.RawFrom), "get_status_internal", "")
+		reply := onTask(fmt.Sprintf("%v", update.RawFrom), "get_status_internal")
 		p.SendMessage(chatID, "📊 *System Status*\n"+reply, MessageOptions{ParseMode: ParseModeHTML})
 		return true
 	case text == "/help":
@@ -295,7 +294,7 @@ func (bm *BotManager) handleShellMode(ctx context.Context, p MessengerProvider, 
 	p.SendMessage(cfg.OwnerID, resp, MessageOptions{ParseMode: ParseModeHTML})
 }
 
-func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, onTask func(from, text, convID string) string) {
+func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, onTask func(from, text string) string) {
 	p.SendAction(cfg.OwnerID, ActionTyping)
 
 	// Use history
