@@ -101,6 +101,9 @@ func (b *Butler) Serve(ctx context.Context) error {
 		}(ch)
 	}
 
+	// Start Social Bots (POC Migration)
+	social.GetBotManager().StartBots(ctx, b.History, b.handleChannelMessage)
+
 	// Initial health check
 	fmt.Println(b.WatchHealth())
 
