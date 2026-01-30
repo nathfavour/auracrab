@@ -18,6 +18,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/cron"
 	"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/social"
 )
 
 type TaskStatus string
