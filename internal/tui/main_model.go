@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
@@ -103,6 +104,7 @@ type Model struct {
 	height         int
 	ready          bool
 	input          textinput.Model
+	viewport       viewport.Model
 	banner         string
 	lastResponse   string
 	isCapturing    bool
@@ -146,14 +148,24 @@ func InitialModel() Model {
 		}
 	}
 
+	hist, _ := butler.History.LoadLocalHistory(100)
+
+	vp := viewport.New(60, 10)
+	vp.Style = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(gray).
+		Padding(0, 1)
+
 	return Model{
-		tasks:        butler.ListTasks(),
-		statusMsg:    butler.GetStatus(),
-		healthMsg:    butler.WatchHealth(),
-		skillsList:   skillNames,
-		input:        ti,
-		configValues: make(map[string]string),
-		historyIndex: -1,
+		tasks:          butler.ListTasks(),
+		statusMsg:      butler.GetStatus(),
+		healthMsg:      butler.WatchHealth(),
+		skillsList:     skillNames,
+		input:          ti,
+		viewport:       vp,
+		configValues:   make(map[string]string),
+		commandHistory: hist,
+		historyIndex:   -1,
 	}
 }
 
@@ -237,6 +249,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.ready = true
 		m.banner = buildBanner(m.width)
+		m.viewport.Width = m.width - 10
+		if m.viewport.Width > 100 {
+			m.viewport.Width = 100
+		}
 
 	case tickMsg:
 		butler := core.GetButler()
@@ -386,6 +402,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Append to history if not same as last
 				if len(m.commandHistory) == 0 || m.commandHistory[len(m.commandHistory)-1] != val {
 					m.commandHistory = append(m.commandHistory, val)
+					_ = core.GetButler().History.SaveLocalHistory(val)
 				}
 
 				if strings.HasPrefix(val, "/") {
@@ -415,6 +432,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.input, cmd = m.input.Update(msg)
+	cmds = append(cmds, cmd)
+
+	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
 
 	m.updateSuggestions()
@@ -684,6 +704,20 @@ func (m Model) View() string {
 		styleSidebar.Render(sidebar.String()),
 	)
 	view.WriteString(mainContent)
+
+	// Logs Section (for selected task)
+	if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
+		selectedTask := m.tasks[m.cursor]
+		view.WriteString("\n" + styleSectionTitle.Render("TASK LOGS: "+selectedTask.ID) + "\n")
+		
+		if len(selectedTask.Logs) == 0 {
+			m.viewport.SetContent(styleFooter.Render("  No logs available yet..."))
+		} else {
+			m.viewport.SetContent(strings.Join(selectedTask.Logs, "\n"))
+		}
+		m.viewport.GotoBottom()
+		view.WriteString(m.viewport.View())
+	}
 
 	// Footer: Input & Status
 	view.WriteString("\n\n")

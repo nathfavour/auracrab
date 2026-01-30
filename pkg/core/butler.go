@@ -1,21 +1,23 @@
 package core
 
 import (
-"context"
-"encoding/json"
-"fmt"
-"os"
-"os/exec"
-"path/filepath"
-"strings"
-"sync"
-"time"
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 
-"github.com/nathfavour/auracrab/pkg/config"
-"github.com/nathfavour/auracrab/pkg/connect"
-"github.com/nathfavour/auracrab/pkg/crabs"
-"github.com/nathfavour/auracrab/pkg/cron"
-"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/config"
+	"github.com/nathfavour/auracrab/pkg/connect"
+	"github.com/nathfavour/auracrab/pkg/crabs"
+	"github.com/nathfavour/auracrab/pkg/cron"
+	"github.com/nathfavour/auracrab/pkg/memory"
 )
 
 type TaskStatus string
@@ -32,6 +34,7 @@ type Task struct {
 	Content   string     `json:"content"`
 	Status    TaskStatus `json:"status"`
 	Result    string     `json:"result,omitempty"`
+	Logs      []string   `json:"logs,omitempty"`
 	StartedAt time.Time  `json:"started_at,omitempty"`
 	EndedAt   time.Time  `json:"ended_at,omitempty"`
 }
@@ -201,23 +204,49 @@ func (b *Butler) executeTask(id, content string, convID string) {
 	b.updateStatus(id, TaskStatusRunning, "")
 
 	// Use vibeaura for intelligence.
-	// We remove --non-interactive to allow it to run the full agentic loop 
-	// until the goal is achieved.
-	// Use the --agent flag we just added to force vibe mode for tool access.
 	cmd := exec.Command("vibeaura", "direct", "--agent", "vibe", content)
-	out, err := cmd.CombinedOutput()
-
-	result := string(out)
+	
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		result = fmt.Sprintf("Error: %v\nOutput: %s", err, string(out))
-		b.updateStatus(id, TaskStatusFailed, result)
-	} else {
-		b.updateStatus(id, TaskStatusCompleted, result)
+		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error creating stdout pipe: %v", err))
+		return
+	}
+	cmd.Stderr = cmd.Stdout // Combine output
+
+	if err := cmd.Start(); err != nil {
+		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error starting vibeaura: %v", err))
+		return
 	}
 
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		b.mu.Lock()
+		if t, ok := b.tasks[id]; ok {
+			t.Logs = append(t.Logs, line)
+		}
+		b.mu.Unlock()
+	}
+
+	if err := cmd.Wait(); err != nil {
+		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Vibeaura exited with error: %v", err))
+	} else {
+		b.updateStatus(id, TaskStatusCompleted, "Task completed successfully.")
+	}
+
+	// Final result collection for history
+	b.mu.RLock()
+	var finalResult string
+	if t, ok := b.tasks[id]; ok {
+		if len(t.Logs) > 0 {
+			finalResult = strings.Join(t.Logs, "\n")
+		}
+	}
+	b.mu.RUnlock()
+
 	// Record result in history if convID is provided
-	if convID != "" {
-		_ = b.History.AddMessage(convID, "assistant", result)
+	if convID != "" && finalResult != "" {
+		_ = b.History.AddMessage(convID, "assistant", finalResult)
 	}
 }
 

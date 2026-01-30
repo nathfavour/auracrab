@@ -69,6 +69,11 @@ func NewHistoryStore() (*HistoryStore, error) {
 		authorized_at DATETIME,
 		PRIMARY KEY(platform, platform_id)
 	);
+	CREATE TABLE IF NOT EXISTS local_history (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		command TEXT UNIQUE,
+		last_used DATETIME
+	);
 	`
 	if _, err := db.Exec(query); err != nil {
 		return nil, fmt.Errorf("failed to initialize history tables: %v", err)
@@ -210,6 +215,37 @@ func (h *HistoryStore) ListConversations() ([]Conversation, error) {
 		conversations = append(conversations, c)
 	}
 	return conversations, nil
+}
+
+// LoadLocalHistory retrieves the recent command history for the TUI.
+func (h *HistoryStore) LoadLocalHistory(limit int) ([]string, error) {
+	rows, err := h.db.Query(
+		"SELECT command FROM local_history ORDER BY last_used ASC LIMIT ?",
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []string
+	for rows.Next() {
+		var cmd string
+		if err := rows.Scan(&cmd); err != nil {
+			return nil, err
+		}
+		history = append(history, cmd)
+	}
+	return history, nil
+}
+
+// SaveLocalHistory saves or updates a command in the TUI history.
+func (h *HistoryStore) SaveLocalHistory(command string) error {
+	_, err := h.db.Exec(
+		"INSERT INTO local_history (command, last_used) VALUES (?, ?) ON CONFLICT(command) DO UPDATE SET last_used = excluded.last_used",
+		command, time.Now(),
+	)
+	return err
 }
 
 // DeleteConversation removes a conversation and all its messages.
