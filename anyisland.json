@@ -1,0 +1,20 @@
+{
+  "name": "auracrab",
+  "version": "1.0.0",
+  "description": "The Autonomous Digital Butler for the Agentic Era.",
+  "repository": "github.com/nathfavour/auracrab",
+  "build": {
+    "steps": [
+      "CGO_ENABLED=0 make build"
+    ],
+    "bin": "bin/auracrab",
+    "toolchain": "go"
+  },
+  "runtime": {
+    "dependencies": [
+      "git"
+    ],
+    "daemon": true,
+    "pulse": true
+  }
+}
