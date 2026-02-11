@@ -9,6 +9,7 @@ type Channel interface {
 	Name() string
 	Start(ctx context.Context, onMessage func(from string, text string) string) error
 	Stop() error
+	Broadcast(message string) error
 }
 
 var channels = make(map[string]Channel)

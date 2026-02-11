@@ -141,6 +141,25 @@ func (h *HistoryStore) GetOrCreateConversationForPlatform(platform, platformID s
 	return convID, nil
 }
 
+// ListAuthorizedEntities returns all authorized IDs for a given platform.
+func (h *HistoryStore) ListAuthorizedEntities(platform string) ([]string, error) {
+	rows, err := h.db.Query("SELECT platform_id FROM authorized_entities WHERE platform = ?", platform)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 // Close closes the database connection.
 func (h *HistoryStore) Close() error {
 	return h.db.Close()

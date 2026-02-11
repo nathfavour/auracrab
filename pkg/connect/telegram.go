@@ -20,6 +20,7 @@ type TelegramChannel struct {
 	offset   int
 	stateDir string
 	history  *memory.HistoryStore
+	bot      *tgbotapi.BotAPI
 }
 
 func (t *TelegramChannel) Name() string {
@@ -33,8 +34,7 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 
 	t.loadOffset()
 
-	// Initialize history store reference (Butler will have it, but we can get it or New it)
-	// For simplicity, we use the global history file
+	// Initialize history store reference
 	var err error
 	t.history, err = memory.NewHistoryStore()
 	if err != nil {
@@ -45,6 +45,7 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 	if err != nil {
 		return fmt.Errorf("failed to create telegram bot: %v", err)
 	}
+	t.bot = bot
 
 	log.Printf("Auracrab: Authorized on account %s", bot.Self.UserName)
 
