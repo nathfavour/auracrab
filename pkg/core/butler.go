@@ -40,6 +40,14 @@ type Task struct {
 	EndedAt   time.Time  `json:"ended_at,omitempty"`
 }
 
+type ProactiveAction struct {
+	Vibe        string  `json:"vibe"`
+	Message     string  `json:"message"`
+	Thought     string  `json:"thought"`
+	Adjustment  float64 `json:"selfishness_adj"`
+	NeedsSetup  string  `json:"needs_setup,omitempty"` // "telegram", "discord", etc.
+}
+
 type Butler struct {
 	tasks     map[string]*Task
 	mu        sync.RWMutex

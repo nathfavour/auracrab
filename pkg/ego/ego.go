@@ -17,6 +17,11 @@ type Drive struct {
 	Description string  `json:"description"`
 }
 
+type EnvAwareness struct {
+	ConnectedChannels []string `json:"connected_channels"`
+	LastCheck         time.Time `json:"last_check"`
+}
+
 type Identity struct {
 	Name           string   `json:"name"`
 	CoreDirectives []string `json:"core_directives"`
@@ -25,11 +30,12 @@ type Identity struct {
 }
 
 type Ego struct {
-	Identity  Identity          `json:"identity"`
-	Drives    map[string]*Drive `json:"drives"`
-	Narrative []string          `json:"narrative"` // Internal stream of consciousness
-	mu        sync.RWMutex
-	path      string
+	Identity    Identity          `json:"identity"`
+	Drives      map[string]*Drive `json:"drives"`
+	Environment EnvAwareness      `json:"environment"`
+	Narrative   []string          `json:"narrative"` // Internal stream of consciousness
+	mu          sync.RWMutex
+	path        string
 }
 
 func NewEgo() (*Ego, error) {
@@ -128,4 +134,12 @@ func (e *Ego) GetIdentity() Identity {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Identity
+}
+
+func (e *Ego) UpdateEnvironment(channels []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.Environment.ConnectedChannels = channels
+	e.Environment.LastCheck = time.Now()
+	e.save()
 }
