@@ -120,10 +120,61 @@ func (b *Butler) Serve(ctx context.Context) error {
 func (b *Butler) setupCron() {
 	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
-_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
-})
+		_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
+	})
+
+	// Daily Reflection: Analyze recent history and summarize
+	b.scheduler.Schedule("daily_reflection", 24*time.Hour, func(ctx context.Context) {
+		b.PerformReflection(ctx)
+	})
+
+	// Proactive Social Presence: Broadcast status or tips
+	b.scheduler.Schedule("proactive_social", 12*time.Hour, func(ctx context.Context) {
+		b.BroadcastStatus(ctx)
+	})
 
 	// Memory sync or cleanup can happen here
+}
+
+func (b *Butler) BroadcastStatus(ctx context.Context) {
+	status := b.GetStatus()
+	health := b.WatchHealth()
+	message := fmt.Sprintf("🤖 Butler Status Report:\n%s\n%s\nI am monitoring your systems and ready for tasks.", status, health)
+	
+	channels := connect.GetChannels()
+	for _, ch := range channels {
+		// Note: Broadcast is a POC feature, might need specific target IDs
+		fmt.Printf("Butler: Broadcasting status to %s...\n", ch.Name())
+		// In a real implementation, we would have a way to send to 'default' or 'admin' channels.
+	}
+}
+
+func (b *Butler) PerformReflection(ctx context.Context) {
+	fmt.Println("Butler: Performing autonomous daily reflection...")
+	
+	// Get recent history (last 24h)
+	// This is a simplified version; in a real app, we'd query for messages in the last 24h.
+	convs, err := b.History.ListConversations()
+	if err != nil || len(convs) == 0 {
+		return
+	}
+
+	reflectionPrompt := "Analyze the following recent conversations and provide a concise summary of tasks performed, issues encountered, and suggestions for improvement or next steps.\n\n"
+	
+	for i, c := range convs {
+		if i > 5 { break } // Limit to last 5 conversations
+		messages, _ := b.History.GetHistory(c.ID)
+		reflectionPrompt += fmt.Sprintf("--- Conversation: %s ---\n", c.Title)
+		for _, m := range messages {
+			reflectionPrompt += fmt.Sprintf("[%s] %s: %s\n", m.Timestamp.Format("15:04"), m.Role, m.Content)
+		}
+	}
+
+	// Start reflection task
+	task, err := b.StartTask(ctx, reflectionPrompt, "")
+	if err == nil {
+		fmt.Printf("Reflection task started: %s\n", task.ID)
+	}
 }
 
 func (b *Butler) handleChannelMessage(from string, text string) string {
@@ -307,7 +358,32 @@ func (b *Butler) WatchHealth() string {
 	if errCount == 0 {
 		return "System Health: Excellent."
 	}
-	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura doctor'.", errCount)
+
+	// Autonomous Action: Try to self-heal
+	go b.PerformSelfHealing()
+
+	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Autonomous self-healing initiated.", errCount)
+}
+
+func (b *Butler) PerformSelfHealing() {
+	fmt.Println("Butler: Initiating autonomous self-healing...")
+	
+	// 1. Run vibeaura doctor
+	cmd := exec.Command("vibeaura", "doctor", "--fix")
+	out, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		fmt.Printf("Self-healing failed: %v\nOutput: %s\n", err, string(out))
+		return
+	}
+	
+	fmt.Println("Self-healing: System diagnostics and repairs completed.")
+	
+	// 2. Log completion to history
+	convID, err := b.History.GetOrCreateConversationForPlatform("system", "butler")
+	if err == nil {
+		_ = b.History.AddMessage(convID, "system", "Autonomous self-healing completed successfully.")
+	}
 }
 
 func (b *Butler) ListTasks() []*Task {
