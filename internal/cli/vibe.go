@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/nathfavour/auracrab/pkg/crabs"
@@ -17,6 +18,41 @@ import (
 func init() {
 	rootCmd.AddCommand(vibeManifestCmd)
 	rootCmd.AddCommand(executeCmd)
+	rootCmd.AddCommand(egoCmd)
+}
+
+var egoCmd = &cobra.Command{
+	Use:   "ego",
+	Short: "Check the status of Auracrab's Ego Module",
+	Run: func(cmd *cobra.Command, args []string) {
+		butler := core.GetButler()
+		e := butler.Ego
+		identity := e.GetIdentity()
+
+		fmt.Printf("--- ENTITY IDENTITY ---\n")
+		fmt.Printf("Name: %s\n", identity.Name)
+		fmt.Printf("Born: %s\n", identity.BornAt.Format(time.RFC822))
+		fmt.Printf("Vibe: %s\n", identity.Vibe)
+		fmt.Printf("\n--- CORE DIRECTIVES ---\n")
+		for _, d := range identity.CoreDirectives {
+			fmt.Printf("- %s\n", d)
+		}
+
+		fmt.Printf("\n--- DRIVES ---\n")
+		for _, d := range e.Drives {
+			bar := strings.Repeat("█", int(d.Value*20)) + strings.Repeat("░", 20-int(d.Value*20))
+			fmt.Printf("%-18s [%s] %.2f - %s\n", d.Name, bar, d.Value, d.Description)
+		}
+
+		fmt.Printf("\n--- RECENT THOUGHTS ---\n")
+		start := len(e.Narrative) - 10
+		if start < 0 {
+			start = 0
+		}
+		for _, t := range e.Narrative[start:] {
+			fmt.Println(t)
+		}
+	},
 }
 
 var vibeManifestCmd = &cobra.Command{

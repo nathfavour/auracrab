@@ -1,7 +1,6 @@
 package ego
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
