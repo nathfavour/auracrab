@@ -183,6 +183,28 @@ func (t *TelegramChannel) Stop() error {
 	return nil
 }
 
+func (t *TelegramChannel) Broadcast(message string) error {
+	if t.bot == nil || t.history == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+
+	chats, err := t.history.ListAuthorizedEntities("telegram")
+	if err != nil {
+		return err
+	}
+
+	for _, chatIDStr := range chats {
+		var chatID int64
+		_, err := fmt.Sscanf(chatIDStr, "%d", &chatID)
+		if err != nil {
+			continue
+		}
+		msg := tgbotapi.NewMessage(chatID, message)
+		_, _ = t.bot.Send(msg)
+	}
+	return nil
+}
+
 func (t *TelegramChannel) loadOffset() {
 	path := filepath.Join(t.stateDir, "offset.json")
 	data, err := os.ReadFile(path)

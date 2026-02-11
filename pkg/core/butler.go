@@ -143,9 +143,8 @@ func (b *Butler) BroadcastStatus(ctx context.Context) {
 	
 	channels := connect.GetChannels()
 	for _, ch := range channels {
-		// Note: Broadcast is a POC feature, might need specific target IDs
 		fmt.Printf("Butler: Broadcasting status to %s...\n", ch.Name())
-		// In a real implementation, we would have a way to send to 'default' or 'admin' channels.
+		_ = ch.Broadcast(message)
 	}
 }
 
