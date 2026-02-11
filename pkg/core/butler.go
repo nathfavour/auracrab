@@ -16,6 +16,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/connect"
 	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/cron"
+	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/social"
 )
