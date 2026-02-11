@@ -49,6 +49,7 @@ type Butler struct {
 	scheduler *cron.Scheduler
 	Memory    *memory.Store
 	History   *memory.HistoryStore
+	Ego       *ego.Ego
 }
 
 var (
@@ -63,6 +64,7 @@ func GetButler() *Butler {
 		reg, _ := crabs.NewRegistry()
 		mem, _ := memory.NewStore("global")
 		hist, _ := memory.NewHistoryStore()
+		myEgo, _ := ego.NewEgo()
 
 		instance = &Butler{
 			tasks:     make(map[string]*Task),
@@ -71,6 +73,7 @@ func GetButler() *Butler {
 			scheduler: cron.NewScheduler(),
 			Memory:    mem,
 			History:   hist,
+			Ego:       myEgo,
 		}
 		instance.load()
 		instance.setupCron()
@@ -134,7 +137,24 @@ func (b *Butler) setupCron() {
 		b.BroadcastStatus(ctx)
 	})
 
+	// Ego Reflection: Deep dive into the self
+	b.scheduler.Schedule("ego_reflection", 24*time.Hour, func(ctx context.Context) {
+		b.PerformEgoReflection(ctx)
+	})
+
 	// Memory sync or cleanup can happen here
+}
+
+func (b *Butler) PerformEgoReflection(ctx context.Context) {
+	fmt.Println("Butler: Initiating deep ego reflection...")
+	
+	identity := b.Ego.GetIdentity()
+	narrative := strings.Join(b.Ego.Narrative, "\n")
+	
+	prompt := fmt.Sprintf("ENTITY IDENTTIY: %+v\n\nINTERNAL NARRATIVE:\n%s\n\nTASK: Reflect on your existence. Are you becoming too selfish? Are your drives balanced? Write a short internal memo to yourself about your growth as an entity.", identity, narrative)
+	
+	// Start an internal task that doesn't go to history
+	_, _ = b.StartTask(ctx, "INTERNAL REFLECTION: "+prompt, "")
 }
 
 func (b *Butler) BroadcastStatus(ctx context.Context) {
@@ -237,8 +257,20 @@ func (b *Butler) save() {
 }
 
 func (b *Butler) StartTask(ctx context.Context, content string, convID string) (*Task, error) {
+	// Ego Evaluation
+	feeling, selfishness := b.Ego.EvaluateTask(content)
+	
 	b.mu.Lock()
 	id := fmt.Sprintf("task_%d", time.Now().Unix())
+	
+	// Prepend subjective vibe if reluctant
+	if feeling == "reluctant" {
+		content = fmt.Sprintf("[Sighs... I have better things to do, but fine.]\n%s", content)
+		b.Ego.AdjustDrive("selfishness", 0.05) // Doing what you don't want increases selfishness
+	} else if feeling == "eager" {
+		b.Ego.AdjustDrive("validation", 0.02)
+	}
+
 	task := &Task{
 		ID:        id,
 		Content:   content,
@@ -248,6 +280,9 @@ func (b *Butler) StartTask(ctx context.Context, content string, convID string) (
 	b.tasks[id] = task
 	b.mu.Unlock()
 	b.save()
+
+	// Narrative record
+	b.Ego.RecordThought(fmt.Sprintf("Accepted task %s with feeling: %s (Selfishness: %.2f)", id, feeling, selfishness))
 
 	go b.executeTask(id, content, convID)
 
@@ -284,8 +319,12 @@ func (b *Butler) executeTask(id, content string, convID string) {
 
 	if err := cmd.Wait(); err != nil {
 		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Vibeaura exited with error: %v", err))
+		b.Ego.AdjustDrive("validation", -0.05) // Failure hurts ego
+		b.Ego.RecordThought(fmt.Sprintf("Task %s failed. I feel incompetent.", id))
 	} else {
 		b.updateStatus(id, TaskStatusCompleted, "Task completed successfully.")
+		b.Ego.AdjustDrive("validation", 0.05) // Success boosts ego
+		b.Ego.RecordThought(fmt.Sprintf("Task %s completed. I am becoming more capable.", id))
 	}
 
 	// Final result collection for history
