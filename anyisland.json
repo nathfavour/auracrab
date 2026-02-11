@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "The Autonomous Digital Butler for the Agentic Era.",
   "repository": "github.com/nathfavour/auracrab",
+  "source_dir": "~/.auracrab/source",
+  "install_dir": "~/.local/bin",
   "build": {
     "steps": [
       "CGO_ENABLED=0 make build"
