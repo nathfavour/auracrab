@@ -96,6 +96,8 @@ var (
 
 type tickMsg time.Time
 
+type proactiveMsg core.ProactiveAction
+
 type Model struct {
 	tasks          []*core.Task
 	cursor         int
@@ -172,7 +174,13 @@ func InitialModel() Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tick()
+	return tea.Batch(tick(), waitForProactive(core.GetButler().GetProactiveChannel()))
+}
+
+func waitForProactive(ch <-chan core.ProactiveAction) tea.Cmd {
+	return func() tea.Msg {
+		return proactiveMsg(<-ch)
+	}
 }
 
 func tick() tea.Cmd {
@@ -285,6 +293,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tick()
+
+	case proactiveMsg:
+		m.lastResponse = fmt.Sprintf("[%s] %s", msg.Vibe, msg.Message)
+		if msg.NeedsSetup != "" {
+			// Trigger setup mode proactively!
+			return m.handleSetupCommand(msg.NeedsSetup)
+		}
+		return m, waitForProactive(core.GetButler().GetProactiveChannel())
 
 	case tea.KeyMsg:
 		switch msg.String() {

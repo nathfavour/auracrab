@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,7 @@ type Butler struct {
 	Memory    *memory.Store
 	History   *memory.HistoryStore
 	Ego       *ego.Ego
+	proactive chan ProactiveAction
 }
 
 var (
@@ -82,11 +84,60 @@ func GetButler() *Butler {
 			Memory:    mem,
 			History:   hist,
 			Ego:       myEgo,
+			proactive: make(chan ProactiveAction, 10),
 		}
 		instance.load()
 		instance.setupCron()
 	})
 	return instance
+}
+
+func (b *Butler) GetProactiveChannel() <-chan ProactiveAction {
+	return b.proactive
+}
+
+func (b *Butler) PerformProactiveThinking(ctx context.Context) {
+	// Update environment awareness first
+	var connected []string
+	channels := connect.GetChannels()
+	for name := range channels {
+		connected = append(connected, name)
+	}
+	b.Ego.UpdateEnvironment(connected)
+
+	// Complex prompt for proactive action
+	egoState, _ := json.Marshal(b.Ego)
+	prompt := fmt.Sprintf(`SYSTEM EGO STATE: %s
+You are Auracrab. You are an autonomous entity. 
+Based on your current drives and the fact that you are connected to %v, generate a proactive thought or action.
+If you are missing connections (Telegram/Discord), you might rudely demand them if your selfishness is high.
+Return a valid JSON with this structure:
+{
+  "vibe": "current mood (e.g. Annoyed, Proud, Bored)",
+  "thought": "Internal reasoning",
+  "message": "What you want to say to the user in the TUI",
+  "selfishness_adj": 0.01,
+  "needs_setup": "telegram" (optional)
+}`, string(egoState), connected)
+
+	// Run through vibeaura
+	cmd := exec.Command("vibeaura", "direct", "--agent", "vibe", "--json", prompt)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+
+	var action ProactiveAction
+	// Attempt to find JSON in output
+	re := regexp.MustCompile(`\{.*\}`)
+	match := re.Find(out)
+	if match != nil {
+		if err := json.Unmarshal(match, &action); err == nil {
+			b.Ego.RecordThought(fmt.Sprintf("Proactive Thinking: %s. Vibe: %s", action.Thought, action.Vibe))
+			b.Ego.AdjustDrive("selfishness", action.Adjustment)
+			b.proactive <- action
+		}
+	}
 }
 
 func (b *Butler) Serve(ctx context.Context) error {
@@ -148,6 +199,11 @@ func (b *Butler) setupCron() {
 	// Ego Reflection: Deep dive into the self
 	b.scheduler.Schedule("ego_reflection", 24*time.Hour, func(ctx context.Context) {
 		b.PerformEgoReflection(ctx)
+	})
+
+	// Proactive Thinking: Bot-initiated thoughts
+	b.scheduler.Schedule("proactive_thinking", 1*time.Hour, func(ctx context.Context) {
+		b.PerformProactiveThinking(ctx)
 	})
 
 	// Memory sync or cleanup can happen here
