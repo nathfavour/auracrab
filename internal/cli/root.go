@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nathfavour/auracrab/pkg/anyisland"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -23,6 +24,11 @@ var rootCmd = &cobra.Command{
 	Long:  `A highly modular CLI project structure built with Go and Cobra.`,
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", config.Version, config.Commit, config.BuildDate),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// If managed by Anyisland, we skip internal update checks as Anyisland handles this via Pulse/OTA
+		if anyisland.IsManaged() {
+			return
+		}
+
 		// Clean up update signals if we are now on the new version
 		availFile := filepath.Join(config.DataDir(), ".update_available")
 		completeFile := filepath.Join(config.DataDir(), ".update_complete")

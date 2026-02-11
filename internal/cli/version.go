@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/nathfavour/auracrab/pkg/anyisland"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/spf13/cobra"
 )
@@ -22,5 +23,8 @@ var versionCmd = &cobra.Command{
 			return
 		}
 		fmt.Println(rootCmd.Version)
+		if anyisland.IsManaged() {
+			fmt.Println("Managed by Anyisland (🏝️)")
+		}
 	},
 }

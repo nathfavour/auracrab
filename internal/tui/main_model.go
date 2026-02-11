@@ -17,6 +17,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
+	"github.com/nathfavour/auracrab/pkg/anyisland"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/nathfavour/auracrab/pkg/skills"
@@ -866,6 +867,22 @@ func gradientWord(word string, colors []lipgloss.Color, spaced bool) string {
 }
 
 func (m Model) takeScreenshot() (tea.Model, tea.Cmd) {
+	if anyisland.IsManaged() {
+		m.isCapturing = true
+		rawView := m.View()
+		m.isCapturing = false
+
+		path, err := anyisland.VisualShot("auracrab", rawView)
+		if err != nil {
+			m.lastResponse = "Anyisland capture failed: " + err.Error()
+		} else if path == "" {
+			m.lastResponse = "Anyisland capture returned empty path"
+		} else {
+			m.lastResponse = "Screenshot saved by Anyisland: " + path
+		}
+		return m, nil
+	}
+
 	dir := config.ScreenshotDir()
 
 	timestamp := time.Now().Format("2006-01-02_150405")
