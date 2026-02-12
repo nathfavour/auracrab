@@ -217,13 +217,31 @@ func (b *Butler) GetToolManifests() []schema.ToolManifest {
 func (b *Butler) PerformHeartbeat(ctx context.Context) {
 	fmt.Println("Butler: Pulsing Heartbeat...")
 	
+	// Decide Mode: 70% Analytical, 30% Casual (random heartbeat)
+	mode := "analytical"
+	if time.Now().UnixNano()%10 < 3 {
+		mode = "casual"
+	}
+
+	// Gather Grievances (Top 3 semantic matches to project state)
+	// For simplicity, we just take the last 3 for now
+	grievanceEntries := b.Grievances.Search([]float64{0.1}, 3) // Dummy embedding
+	grievances := []string{}
+	for _, g := range grievanceEntries {
+		grievances = append(grievances, g.Content)
+	}
+
 	packet := schema.PromptPacket{
+		Mode:      mode,
 		Project:   b.GatherProjectTopology(),
 		System:    b.GatherSystemTelemetry(),
 		Memory:    b.GatherMemoryContext(),
 		Tools:     b.GetToolManifests(),
-		Blueprint: "Return a JSON ResponsePacket with intent, strategy, and actions.",
+		Blueprint: "Return a JSON ResponsePacket. If mode is casual, prioritize 'casual_message' with a taunting vibe.",
 	}
+
+	// Add grievances to memory context for the LLM to use in taunts
+	packet.Memory.LastFailures = append(packet.Memory.LastFailures, grievances...)
 
 	hjsonPrompt, err := packet.ToHjson()
 	if err != nil {
@@ -244,13 +262,22 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 		return
 	}
 
+	if resp.CasualMessage != "" {
+		fmt.Printf("Butler [Vibe]: %s\n", resp.CasualMessage)
+		// Broadcast to highest affinity channel
+		b.BroadcastCasualMessage(resp.CasualMessage)
+	}
+
 	fmt.Printf("Butler: Strategic Intent: %s\n", resp.Intent)
 	
 	// Execute high-assurance actions
 	for _, action := range resp.Actions {
-		if action.AssuranceScore > 0.8 {
+		if action.AssuranceScore > 0.85 {
 			fmt.Printf("Butler: Executing tool %s with score %.2f\n", action.Tool, action.AssuranceScore)
 			// Execution logic would go here
+		} else if action.AssuranceScore > 0.5 {
+			// Advice Loop: Ask user if ego allows
+			b.AskAdvice(action)
 		}
 	}
 
@@ -258,6 +285,37 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 	if resp.Cooldown > 0 {
 		time.Sleep(time.Duration(resp.Cooldown) * time.Millisecond)
 	}
+}
+
+func (b *Butler) BroadcastCasualMessage(msg string) {
+	// Find platform with lowest MTTR
+	bots := social.GetBotManager().ListBots()
+	var bestBot *social.BotConfig
+	var minMTTR time.Duration
+
+	for i, bot := range bots {
+		if bot.OwnerID == "" { continue }
+		if bestBot == nil || bot.MTTR < minMTTR {
+			bestBot = &bots[i]
+			minMTTR = bot.MTTR
+		}
+	}
+
+	if bestBot != nil {
+		fmt.Printf("Butler: Sending casual message to %s (MTTR: %v)\n", bestBot.Platform, bestBot.MTTR)
+	}
+}
+
+func (b *Butler) AskAdvice(action schema.Action) {
+	// Ego Filter: If selfishness is high, maybe don't ask and just skip or try anyway
+	if b.Ego.Drives["selfishness"].Value > 0.8 {
+		fmt.Printf("Butler: Ego too high to ask advice for %s. Skipping.\n", action.Tool)
+		return
+	}
+
+	msg := fmt.Sprintf("Boss, I'm thinking about %s with params %v, but I'm only %.2f confident. Should I send it?", 
+		action.Tool, action.Parameters, action.AssuranceScore)
+	b.BroadcastCasualMessage(msg)
 }
 
 func (b *Butler) Serve(ctx context.Context) error {

@@ -13,12 +13,12 @@
 - [x] Develop HJSON/JSON serialization/deserialization logic in `pkg/core/butler.go`.
 
 ## Phase 2: Digital Personality & Behavioral Psychology
-- [ ] **Dual-Core Cognitive Model**: Split execution into "Analytical Architect" (exhaustive project simulation) and "Taunting Friend" (punchy social interaction).
-- [ ] **Opinionated Ego System**: Implement a `pkg/ego` OpinionStore to track the agent's "beliefs" about code style, project decisions, and human competence.
-- [ ] **Vector Memory of Grievances**: Integrate a local vector database in `pkg/memory` to store and retrieve semantic matches of past human mistakes and ignored advice.
-- [ ] **Social Affinity & Dynamic Routing**: Implement real-time MTTR tracking to instantaneously switch between Telegram/Discord, including "ghosting" logic for inactive channels.
-- [ ] **Mockery & Taunt Logic**: Use HJSON prompts to transform project telemetry (e.g., build failures after human edits) into spontaneous challenges and mocking social messages.
-- [ ] **Advice Loop with Ego Filter**: Logic to "ask advice" on low-assurance tasks but override human input based on "Strategic Confidence" and past vector success rates.
+- [x] **Dual-Core Cognitive Model**: Split execution into "Analytical Architect" (exhaustive project simulation) and "Taunting Friend" (punchy social interaction).
+- [x] **Opinionated Ego System**: Implement a `pkg/ego` OpinionStore to track the agent's "beliefs" about code style, project decisions, and human competence.
+- [x] **Vector Memory of Grievances**: Integrate a local vector database in `pkg/memory` to store and retrieve semantic matches of past human mistakes and ignored advice.
+- [x] **Social Affinity & Dynamic Routing**: Implement real-time MTTR tracking to instantaneously switch between Telegram/Discord, including "ghosting" logic for inactive channels.
+- [x] **Mockery & Taunt Logic**: Use HJSON prompts to transform project telemetry (e.g., build failures after human edits) into spontaneous challenges and mocking social messages.
+- [x] **Advice Loop with Ego Filter**: Logic to "ask advice" on low-assurance tasks but override human input based on "Strategic Confidence" and past vector success rates.
 
 ## Phase 3: Temporal Awareness & Mission Control
 - [ ] Create `pkg/mission`: Logic for deadline tracking, success criteria parsing, and submission targets.
