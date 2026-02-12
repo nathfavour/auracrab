@@ -40,9 +40,23 @@ func NewClient() *Client {
 }
 
 func (c *Client) call(method string, payload interface{}) (json.RawMessage, error) {
-	conn, err := net.Dial("unix", c.socketPath)
+	var conn net.Conn
+	var err error
+
+	// Retry logic for connection
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		conn, err = net.Dial("unix", c.socketPath)
+		if err == nil {
+			break
+		}
+		if i < maxRetries-1 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to vibeauracle UDS: %w", err)
+		return nil, fmt.Errorf("failed to connect to vibeauracle UDS after retries: %w", err)
 	}
 	defer conn.Close()
 
