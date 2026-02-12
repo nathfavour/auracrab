@@ -15,8 +15,11 @@ import (
 
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/memory"
-	"github.com/nathfavour/auracrab/pkg/vibe"
 )
+
+type ContextualQuerier interface {
+	QueryWithContext(ctx context.Context, prompt string, intent string) (string, error)
+}
 
 type BotMode string
 
@@ -125,18 +128,18 @@ func (bm *BotManager) UpdateBot(cfg BotConfig) error {
 	return fmt.Errorf("bot not found")
 }
 
-func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStore, onTask func(from, text string) string) {
+func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
 	bm.mu.RLock()
 	bots := make([]BotConfig, len(bm.bots))
 	copy(bots, bm.bots)
 	bm.mu.RUnlock()
 
 	for i := range bots {
-		go bm.runBot(ctx, &bots[i], history, onTask)
+		go bm.runBot(ctx, &bots[i], history, querier, onTask)
 	}
 }
 
-func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memory.HistoryStore, onTask func(from, text string) string) {
+func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
 	var p MessengerProvider
 	var err error
 
@@ -218,7 +221,7 @@ func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memor
 			}
 
 			// Handle Commands
-			if bm.handleCommand(ctx, p, cfg, update, onTask) {
+			if bm.handleCommand(ctx, p, cfg, update, querier, onTask) {
 				continue
 			}
 
@@ -227,11 +230,11 @@ func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memor
 			case ModeShell:
 				bm.handleShellMode(ctx, p, cfg, text)
 			case ModeAgent, ModeChat:
-				bm.handleAgenticMode(ctx, p, cfg, text, history, onTask)
+				bm.handleAgenticMode(ctx, p, cfg, text, history, querier, onTask)
 			default:
 				cfg.Mode = ModeChat
 				bm.UpdateBot(*cfg)
-				bm.handleAgenticMode(ctx, p, cfg, text, history, onTask)
+				bm.handleAgenticMode(ctx, p, cfg, text, history, querier, onTask)
 			}
 		}
 	}
@@ -250,7 +253,7 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 	bm.UpdateBot(*cfg)
 }
 
-func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, onTask func(from, text string) string) bool {
+func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, querier ContextualQuerier, onTask func(from, text string) string) bool {
 	text := update.Text
 	if !strings.HasPrefix(text, "/") && !strings.HasPrefix(text, "Mode:") {
 		return false
@@ -268,8 +271,8 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 	_ = hist.AddMessage(convID, "user", text)
 
 	go func() {
-		// Use Butler for context-aware query
-		finalReply, err := core.GetButler().QueryWithContext(ctx, prompt, "agent")
+		// Use querier for context-aware query
+		finalReply, err := querier.QueryWithContext(ctx, prompt, "agent")
 		if err != nil {
 			p.SendMessage(update.ChatID, "⚠️ Command system glitch. Don't touch anything.", MessageOptions{ParseMode: ParseModeHTML})
 			return
@@ -346,7 +349,7 @@ func (bm *BotManager) handleShellMode(ctx context.Context, p MessengerProvider, 
 	bm.UpdateBot(*cfg)
 }
 
-func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, onTask func(from, text string) string) {
+func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
 	p.SendAction(cfg.OwnerID, ActionTyping)
 
 	// Use history
@@ -363,7 +366,7 @@ func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider
 
 	go func() {
 		// Run through Butler for full context
-		finalReply, err := core.GetButler().QueryWithContext(ctx, prompt, intent)
+		finalReply, err := querier.QueryWithContext(ctx, prompt, intent)
 		if err != nil {
 			p.SendMessage(cfg.OwnerID, fmt.Sprintf("⚠️ *Error*\n```\n%v\n```", err), MessageOptions{ParseMode: ParseModeHTML})
 			return
@@ -388,24 +391,14 @@ func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider
 
 func (bm *BotManager) SendMessage(platform string, chatID string, text string) error {
 	bm.mu.RLock()
-	var bot *BotConfig
-	for i := range bm.bots {
-		if bm.bots[i].Platform == platform {
-			bot = &bm.bots[i]
-			break
-		}
-	}
+	p, ok := bm.providers[platform]
 	bm.mu.RUnlock()
 
-	if bot == nil {
-		return fmt.Errorf("bot for platform %s not found", platform)
+	if !ok {
+		return fmt.Errorf("provider for platform %s not found or not active", platform)
 	}
 
-	// We'd need to keep instances of providers.
-	// For simplicity in this refactor, I'll just log it.
-	// In a real implementation, BotManager would hold active Provider instances.
-	log.Printf("BotManager: Sending message to %s (%s): %s", platform, chatID, text)
-	return nil
+	return p.SendMessage(chatID, text, MessageOptions{ParseMode: ParseModeHTML})
 }
 
 // Utility functions

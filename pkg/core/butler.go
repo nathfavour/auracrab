@@ -349,6 +349,27 @@ func (b *Butler) AskAdvice(action schema.Action) {
 	b.BroadcastCasualMessage(msg)
 }
 
+func (b *Butler) GetHeartbeatInterval() time.Duration {
+	active := b.Missions.GetActiveMission()
+	if active == nil {
+		return 10 * time.Minute // Resource conservation
+	}
+
+	tr, _ := b.Missions.TimeRemaining(active.ID)
+	
+	// Crunch Mode: Less than 6h remaining or TTC > TR
+	if tr < 6*time.Hour || active.EstimatedTTC > tr {
+		return 1 * time.Minute
+	}
+
+	// Normal Mode: Less than 24h remaining
+	if tr < 24*time.Hour {
+		return 5 * time.Minute
+	}
+
+	return 10 * time.Minute
+}
+
 func (b *Butler) Serve(ctx context.Context) error {
 	if pid, running := daemon.IsRunning(); running {
 		return fmt.Errorf("auracrab is already running (PID: %d)", pid)
@@ -391,7 +412,7 @@ func (b *Butler) Serve(ctx context.Context) error {
 	}
 
 	// Start Social Bots (POC Migration)
-	social.GetBotManager().StartBots(ctx, b.History, b.handleChannelMessage)
+	social.GetBotManager().StartBots(ctx, b.History, b, b.handleChannelMessage)
 
 	// Start File System Watcher
 	w, err := watcher.NewWatcher(func(path string) {
@@ -413,15 +434,17 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Start scheduler
 	go b.scheduler.Start(ctx)
 
-	// Heartbeat Loop
+	// Heartbeat Loop (Adaptive Pacing)
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute) // Default heartbeat
-		defer ticker.Stop()
 		for {
+			interval := b.GetHeartbeatInterval()
+			timer := time.NewTimer(interval)
+			
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return
-			case <-ticker.C:
+			case <-timer.C:
 				b.PerformHeartbeat(ctx)
 			}
 		}

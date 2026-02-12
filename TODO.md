@@ -21,10 +21,10 @@
 - [x] **Advice Loop with Ego Filter**: Logic to "ask advice" on low-assurance tasks but override human input based on "Strategic Confidence" and past vector success rates.
 
 ## Phase 3: Temporal Awareness & Mission Control
-- [ ] Create `pkg/mission`: Logic for deadline tracking, success criteria parsing, and submission targets.
-- [ ] Implement **TTC vs TR** (Time-to-Completion vs Time-Remaining) calculations.
-- [ ] Integrate `clock_state` into the HJSON prompt to inform the LLM of temporal constraints.
-- [ ] Logic for **Adaptive Pacing**: Transition between "Normal Mode" (resource conservation) and "Crunch Mode" (deadline-driven high frequency).
+- [x] Create `pkg/mission`: Logic for deadline tracking, success criteria parsing, and submission targets.
+- [x] Implement **TTC vs TR** (Time-to-Completion vs Time-Remaining) calculations.
+- [x] Integrate `clock_state` into the HJSON prompt to inform the LLM of temporal constraints.
+- [x] Logic for **Adaptive Pacing**: Transition between "Normal Mode" (resource conservation) and "Crunch Mode" (deadline-driven high frequency).
 
 ## Phase 4: Autonomous Sensing & Ingestion
 - [ ] Enhance `pkg/social`: Monitor Discord/Telegram/Files for external mission triggers.
