@@ -14,6 +14,7 @@ import (
 
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/vibe"
 )
 
 type BotMode string
@@ -301,62 +302,28 @@ func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider
 	convID, _ := history.GetOrCreateConversationForPlatform(cfg.Platform, cfg.OwnerID)
 	
 	prompt := text
+	intent := "crud"
 	if cfg.Mode == ModeChat {
 		prompt = "CONVERSATIONAL MODE: Concise response. Minimal tools.\n\n" + text
+		intent = "ask"
 	} else {
 		prompt = "AGENT MODE: Use tools to solve.\n\n" + text
 	}
 
-	// We'll execute via Butler's StartTask if we want it to show up in TUI,
-	// but the POC executes it directly via vibeaura for immediate streaming/handling.
-	// Let's use vibeaura directly as in POC for the "Gateway" experience.
-	
 	go func() {
-		// This is a bit redundant with Butler.executeTask but provides the POC's specialized formatting
-		cmd := exec.CommandContext(ctx, "vibeaura", "direct", "--non-interactive")
-		cmd.Stdin = strings.NewReader(prompt)
-		
-		output, err := cmd.CombinedOutput()
+		// Run through vibeaura UDS
+		client := vibe.NewClient()
+		finalReply, err := client.Query(prompt, intent)
 		if err != nil {
 			p.SendMessage(cfg.OwnerID, fmt.Sprintf("⚠️ *Error*\n```\n%v\n```", err), MessageOptions{ParseMode: ParseModeHTML})
 			return
 		}
 
-		rawOutput := string(output)
-		lines := strings.Split(rawOutput, "\n")
-		var thinking []string
-		var reply []string
-
-		statusRegex := regexp.MustCompile(`^(\x1b\[[0-9;]*m)?[.+?]\s+[A-Z-]+\s+\|.*`)
-
-		for _, line := range lines {
-			if line == "" || strings.HasPrefix(line, "User:") {
-				continue
-			}
-			if statusRegex.MatchString(line) {
-				thinking = append(thinking, StripANSI(line))
-			} else {
-				if strings.TrimSpace(line) != "" {
-					reply = append(reply, line)
-				}
-			}
-		}
-
-		var respBuilder strings.Builder
-		if len(thinking) > 0 {
-			respBuilder.WriteString("*💭 Thinking...*\n")
-			respBuilder.WriteString("```\n")
-			respBuilder.WriteString(strings.Join(thinking, "\n"))
-			respBuilder.WriteString("\n```\n\n")
-		}
-
-		finalReply := strings.Join(reply, "\n")
 		if finalReply == "" {
 			finalReply = "_No response._"
 		}
-		respBuilder.WriteString(finalReply)
 
-		p.SendMessage(cfg.OwnerID, respBuilder.String(), MessageOptions{ParseMode: ParseModeHTML})
+		p.SendMessage(cfg.OwnerID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
 		
 		// Record in history
 		_ = history.AddMessage(convID, "user", text)

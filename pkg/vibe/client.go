@@ -59,8 +59,7 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 		return nil, err
 	}
 
-	_, err = conn.Write(append(data, '
-'))
+	_, err = conn.Write(append(data, '\n'))
 	if err != nil {
 		return nil, err
 	}

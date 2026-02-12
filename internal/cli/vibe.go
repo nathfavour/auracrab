@@ -152,7 +152,16 @@ var vibeManifestCmd = &cobra.Command{
 			"command":     "auracrab",
 			"update_cmd":  "auracrab update",
 			"inbuilt":     true,
-			"tool_set":    toolSet,
+			"comms": map[string]bool{
+				"tui": true,
+				"cli": true,
+				"uds": true,
+			},
+			"capabilities": map[string]bool{
+				"agentic":   true,
+				"read_only": false,
+			},
+			"tool_set": toolSet,
 		}
 		data, _ := json.MarshalIndent(manifest, "", "  ")
 		fmt.Println(string(data))
