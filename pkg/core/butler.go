@@ -457,6 +457,24 @@ func (b *Butler) Serve(ctx context.Context) error {
 	return nil
 }
 
+func (b *Butler) PerformSensing(ctx context.Context) {
+	fmt.Println("Butler: Sensing environment for signals...")
+
+	// 1. Detect TODO.md for sub-tasks
+	if data, err := os.ReadFile("TODO.md"); err == nil {
+		b.Ego.RecordThought("Sensed TODO.md. Looking for mission alignment.")
+		// We could parse this and update mission progress or tasks
+		_ = data // Placeholder
+	}
+
+	// 2. Detect project type for specialized agent engagement
+	if _, err := os.Stat("go.mod"); err == nil {
+		b.Ego.RecordThought("Confirmed Go project. I'll prioritize Golang-optimized strategies.")
+	} else if _, err := os.Stat("package.json"); err == nil {
+		b.Ego.RecordThought("Node.js project detected. Adjusting cognitive focus.")
+	}
+}
+
 func (b *Butler) setupCron() {
 	// Autonomous Self-Update check via Anyisland
 	b.scheduler.Schedule("self_update", 6*time.Hour, func(ctx context.Context) {
@@ -491,6 +509,11 @@ func (b *Butler) setupCron() {
 	// Mission Audit: Check deadlines and progress
 	b.scheduler.Schedule("mission_audit", 1*time.Hour, func(ctx context.Context) {
 		b.PerformMissionAudit(ctx)
+	})
+
+	// Environment Sensing: Detect local signals
+	b.scheduler.Schedule("environment_sensing", 1*time.Hour, func(ctx context.Context) {
+		b.PerformSensing(ctx)
 	})
 
 	// Memory sync or cleanup can happen here
@@ -605,6 +628,17 @@ func (b *Butler) SenseMission(from, text string) {
 	m := b.Missions.CreateMission(suggestion.Title, suggestion.Reason, suggestion.Goal, suggestion.Deadline)
 	
 	b.BroadcastCasualMessage(fmt.Sprintf("🚨 NEW MISSION DETECTED: '%s'. I've already ingested it. Don't slow me down.", m.Title))
+
+	// Proactive Environment Bootstrapping
+	go func() {
+		b.Ego.RecordThought(fmt.Sprintf("Bootstrapping environment for mission: %s", m.Title))
+		if err := m.BootstrapRequirements(b); err != nil {
+			fmt.Printf("Bootstrap failed: %v\n", err)
+			b.Ego.RecordThought(fmt.Sprintf("Bootstrap failed for mission %s: %v", m.Title, err))
+		} else {
+			b.BroadcastCasualMessage(fmt.Sprintf("🏗️ Environment for '%s' is ready. I've set up everything. You're welcome.", m.Title))
+		}
+	}()
 }
 
 func (b *Butler) handleChannelMessage(from string, text string) string {

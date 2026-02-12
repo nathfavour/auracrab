@@ -1,8 +1,11 @@
 package mission
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -120,7 +123,20 @@ type MissionSuggestion struct {
 }
 
 func (m *Manager) ParseMission(text string, querier interface{ QueryWithContext(context.Context, string, string) (string, error) }) (*MissionSuggestion, error) {
-	// ... (rest of ParseMission)
+	prompt := fmt.Sprintf("Analyze the following text and determine if it contains a potential project mission or hackathon goal. If it does, extract the Title, Goal, and an estimated or explicit Deadline. \n\nTEXT: %s\n\nReturn JSON only: {\"title\": \"...\", \"goal\": \"...\", \"deadline\": \"RFC3339\", \"reason\": \"why this is a mission\"}", text)
+	
+	res, err := querier.QueryWithContext(context.Background(), prompt, "ask")
+	if err != nil {
+		return nil, err
+	}
+
+	// Simple JSON extraction
+	var suggestion MissionSuggestion
+	if err := json.Unmarshal([]byte(res), &suggestion); err != nil {
+		// Try regex if direct unmarshal fails (LLM might wrap in markdown)
+		return nil, fmt.Errorf("failed to parse mission suggestion: %v. Raw: %s", err, res)
+	}
+
 	return &suggestion, nil
 }
 

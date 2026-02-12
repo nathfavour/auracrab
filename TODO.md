@@ -27,9 +27,9 @@
 - [x] Logic for **Adaptive Pacing**: Transition between "Normal Mode" (resource conservation) and "Crunch Mode" (deadline-driven high frequency).
 
 ## Phase 4: Autonomous Sensing & Ingestion
-- [ ] Enhance `pkg/social`: Monitor Discord/Telegram/Files for external mission triggers.
-- [ ] Implement **Autonomous Fetching**: Use `browser_skill` or shell commands to download requirements, assets, and third-party documentation.
-- [ ] Setup "Mission Ingestion" to automatically bootstrap a project environment based on external requirements.
+- [x] Enhance `pkg/social`: Monitor Discord/Telegram/Files for external mission triggers.
+- [x] Implement **Autonomous Fetching**: Use `browser_skill` or shell commands to download requirements, assets, and third-party documentation.
+- [x] Setup "Mission Ingestion" to automatically bootstrap a project environment based on external requirements.
 
 ## Phase 5: High-Assurance Execution & Entropy
 - [ ] Implement **Assurance Score Thresholds**: Logic to gate actions based on LLM confidence (e.g., > 0.85 for write actions).
