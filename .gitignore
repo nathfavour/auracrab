@@ -4,3 +4,4 @@ vendor/
 *.log
 bin/
 auracrab
+.auracrab_tests/
