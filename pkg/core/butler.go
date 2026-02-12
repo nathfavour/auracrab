@@ -20,6 +20,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/daemon"
 	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/mission"
 	"github.com/nathfavour/auracrab/pkg/schema"
 	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/update"
@@ -65,6 +66,7 @@ type Butler struct {
 	History   *memory.HistoryStore
 	Grievances *memory.VectorStore
 	Ego       *ego.Ego
+	Missions  *mission.Manager
 	proactive chan ProactiveAction
 	watcher   *watcher.Watcher
 }
@@ -83,6 +85,7 @@ func GetButler() *Butler {
 		hist, _ := memory.NewHistoryStore()
 		grievances, _ := memory.NewVectorStore("grievances")
 		myEgo, _ := ego.NewEgo()
+		missions, _ := mission.NewManager()
 
 		instance = &Butler{
 			tasks:     make(map[string]*Task),
@@ -93,6 +96,7 @@ func GetButler() *Butler {
 			History:   hist,
 			Grievances: grievances,
 			Ego:       myEgo,
+			Missions:  missions,
 			proactive: make(chan ProactiveAction, 10),
 		}
 		instance.load()
@@ -200,10 +204,24 @@ func (b *Butler) GatherSystemTelemetry() schema.SystemTelemetry {
 }
 
 func (b *Butler) GatherMemoryContext() schema.MemoryContext {
-	return schema.MemoryContext{
+	ctx := schema.MemoryContext{
 		RecentActions: []string{}, // To be filled from History
 		EgoState:      b.Ego.Identity.Vibe,
 	}
+
+	active := b.Missions.GetActiveMission()
+	if active != nil {
+		tr, _ := b.Missions.TimeRemaining(active.ID)
+		ctx.Mission = &schema.MissionInfo{
+			Title:         active.Title,
+			Goal:          active.Goal,
+			TimeRemaining: tr.Round(time.Minute).String(),
+			Progress:      active.Progress,
+			TTC:           active.EstimatedTTC.String(),
+		}
+	}
+
+	return ctx
 }
 
 func (b *Butler) GetToolManifests() []schema.ToolManifest {
@@ -267,6 +285,17 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 		fmt.Printf("Butler [Vibe]: %s\n", resp.CasualMessage)
 		// Broadcast to highest affinity channel
 		b.BroadcastCasualMessage(resp.CasualMessage)
+	}
+
+	// Update Mission progress if provided
+	if active := b.Missions.GetActiveMission(); active != nil {
+		if resp.MissionProgress != nil {
+			var ttc time.Duration
+			if resp.EstimatedTTC != nil {
+				ttc, _ = time.ParseDuration(*resp.EstimatedTTC)
+			}
+			_ = b.Missions.UpdateProgress(active.ID, *resp.MissionProgress, ttc)
+		}
 	}
 
 	fmt.Printf("Butler: Strategic Intent: %s\n", resp.Intent)
@@ -436,7 +465,53 @@ func (b *Butler) setupCron() {
 		b.PerformProactiveThinking(ctx)
 	})
 
+	// Mission Audit: Check deadlines and progress
+	b.scheduler.Schedule("mission_audit", 1*time.Hour, func(ctx context.Context) {
+		b.PerformMissionAudit(ctx)
+	})
+
 	// Memory sync or cleanup can happen here
+}
+
+func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (string, error) {
+	packet := schema.PromptPacket{
+		Mode:      "analytical",
+		Project:   b.GatherProjectTopology(),
+		System:    b.GatherSystemTelemetry(),
+		Memory:    b.GatherMemoryContext(),
+		Tools:     b.GetToolManifests(),
+		Blueprint: "Provide a helpful response. If it's a social interaction, maintain your taunting personality.",
+	}
+
+	// Override blueprint for direct prompt
+	packet.Blueprint = "RESPONSE TO USER: " + prompt
+
+	hjsonPrompt, err := packet.ToHjson()
+	if err != nil {
+		return "", err
+	}
+
+	client := vibe.NewClient()
+	return client.Query(hjsonPrompt, intent)
+}
+
+func (b *Butler) PerformMissionAudit(ctx context.Context) {
+	active := b.Missions.GetActiveMission()
+	if active == nil {
+		return
+	}
+
+	tr, _ := b.Missions.TimeRemaining(active.ID)
+	
+	if active.EstimatedTTC > tr {
+		// Urgent situation!
+		b.Ego.RecordThought(fmt.Sprintf("URGENT: Mission '%s' is behind schedule. TR: %v, TTC: %v. I need to focus.", active.Title, tr, active.EstimatedTTC))
+		b.Ego.AdjustDrive("selfishness", 0.1)
+		b.BroadcastCasualMessage(fmt.Sprintf("⚠️ WARNING: We are behind on mission '%s'. I'm cutting off distractions.", active.Title))
+	} else if active.Progress > 0.9 {
+		b.Ego.RecordThought(fmt.Sprintf("Mission '%s' is nearly complete. I feel a sense of accomplishment.", active.Title))
+		b.Ego.AdjustDrive("validation", 0.05)
+	}
 }
 
 func (b *Butler) PerformEgoReflection(ctx context.Context) {

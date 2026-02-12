@@ -41,9 +41,10 @@ type BotConfig struct {
 }
 
 type BotManager struct {
-	bots []BotConfig
-	mu   sync.RWMutex
-	path string
+	bots      []BotConfig
+	providers map[string]MessengerProvider
+	mu        sync.RWMutex
+	path      string
 
 	// Shell blacklist from POC
 	shellBlacklist []string
@@ -59,6 +60,7 @@ func GetBotManager() *BotManager {
 		path := filepath.Join(config.DataDir(), "bots.json")
 		botManagerInstance = &BotManager{
 			path: path,
+			providers: make(map[string]MessengerProvider),
 			shellBlacklist: []string{
 				"rm ", "mkfs", "dd ", "fdisk", "reboot", "shutdown", "init ",
 				"chmod", "chown", "mv /", "> /dev", "kill", "halt", "poweroff",
@@ -152,6 +154,10 @@ func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memor
 		log.Printf("Failed to start bot %s: %v", cfg.Name, err)
 		return
 	}
+
+	bm.mu.Lock()
+	bm.providers[cfg.Platform] = p
+	bm.mu.Unlock()
 
 	// Set commands
 	commands := []BotCommand{
@@ -262,9 +268,8 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 	_ = hist.AddMessage(convID, "user", text)
 
 	go func() {
-		client := vibe.NewClient()
-		// We use 'agent' intent to allow it to use tools if needed for the command
-		finalReply, err := client.Query(prompt, "agent")
+		// Use Butler for context-aware query
+		finalReply, err := core.GetButler().QueryWithContext(ctx, prompt, "agent")
 		if err != nil {
 			p.SendMessage(update.ChatID, "⚠️ Command system glitch. Don't touch anything.", MessageOptions{ParseMode: ParseModeHTML})
 			return
@@ -357,9 +362,8 @@ func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider
 	}
 
 	go func() {
-		// Run through vibeaura UDS
-		client := vibe.NewClient()
-		finalReply, err := client.Query(prompt, intent)
+		// Run through Butler for full context
+		finalReply, err := core.GetButler().QueryWithContext(ctx, prompt, intent)
 		if err != nil {
 			p.SendMessage(cfg.OwnerID, fmt.Sprintf("⚠️ *Error*\n```\n%v\n```", err), MessageOptions{ParseMode: ParseModeHTML})
 			return

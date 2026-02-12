@@ -24,6 +24,15 @@ type MemoryContext struct {
 	RecentActions []string `json:"recent_actions"`
 	LastFailures  []string `json:"last_failures"`
 	EgoState      string   `json:"ego_state"`
+	Mission       *MissionInfo `json:"mission,omitempty"`
+}
+
+type MissionInfo struct {
+	Title         string `json:"title"`
+	Goal          string `json:"goal"`
+	TimeRemaining string `json:"time_remaining"`
+	Progress      float64 `json:"progress"`
+	TTC           string  `json:"estimated_ttc"`
 }
 
 type ToolManifest struct {
@@ -73,6 +82,10 @@ type ResponsePacket struct {
 	CasualMessage  string   `json:"casual_message,omitempty"` // For the "Taunting Friend" vibe
 	Cooldown       int      `json:"cooldown_ms"`
 	SelfCorrection string   `json:"self_correction,omitempty"`
+
+	// Autonomous mission management
+	MissionProgress *float64 `json:"mission_progress,omitempty"`
+	EstimatedTTC    *string  `json:"estimated_ttc,omitempty"` // e.g. "2h45m"
 }
 
 func ParseResponse(data string) (*ResponsePacket, error) {
