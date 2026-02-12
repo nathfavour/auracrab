@@ -88,7 +88,7 @@ var vibeManifestCmd = &cobra.Command{
 			},
 			{
 				"name":        "auracrab_watch_health",
-				"description": "Watch vibeauracle health logs and report issues",
+				"description": "Check vibeauracle health via UDS and report issues",
 				"inputSchema": json.RawMessage(`{"type":"object","properties":{}}`),
 			},
 			{
