@@ -80,6 +80,7 @@ func GetButler() *Butler {
 		reg, _ := crabs.NewRegistry()
 		mem, _ := memory.NewStore("global")
 		hist, _ := memory.NewHistoryStore()
+		grievances, _ := memory.NewVectorStore("grievances")
 		myEgo, _ := ego.NewEgo()
 
 		instance = &Butler{
@@ -89,6 +90,7 @@ func GetButler() *Butler {
 			scheduler: cron.NewScheduler(),
 			Memory:    mem,
 			History:   hist,
+			Grievances: grievances,
 			Ego:       myEgo,
 			proactive: make(chan ProactiveAction, 10),
 		}

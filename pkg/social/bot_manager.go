@@ -32,6 +32,11 @@ type BotConfig struct {
 	Platform string  `json:"platform"` // "telegram", "discord"
 	OwnerID  string  `json:"owner_id,omitempty"`
 	Mode     BotMode `json:"mode,omitempty"`
+	
+	// Social Affinity Metrics
+	MTTR          time.Duration `json:"mttr,omitempty"`
+	LastMessageAt time.Time     `json:"last_message_at,omitempty"`
+	ReplyCount    int           `json:"reply_count,omitempty"`
 }
 
 type BotManager struct {
@@ -189,6 +194,17 @@ func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memor
 			text := update.Text
 			if text == "" {
 				continue
+			}
+
+			// Update MTTR if we were waiting for a reply
+			if !cfg.LastMessageAt.IsZero() {
+				latency := time.Since(cfg.LastMessageAt)
+				bm.mu.Lock()
+				cfg.MTTR = (cfg.MTTR*time.Duration(cfg.ReplyCount) + latency) / time.Duration(cfg.ReplyCount+1)
+				cfg.ReplyCount++
+				cfg.LastMessageAt = time.Time{} // Reset
+				bm.mu.Unlock()
+				bm.UpdateBot(*cfg)
 			}
 
 			// Handle Commands
