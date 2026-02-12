@@ -341,6 +341,11 @@ func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider
 
 		p.SendMessage(cfg.OwnerID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
 		
+		bm.mu.Lock()
+		cfg.LastMessageAt = time.Now()
+		bm.mu.Unlock()
+		bm.UpdateBot(*cfg)
+
 		// Record in history
 		_ = history.AddMessage(convID, "user", text)
 		_ = history.AddMessage(convID, "assistant", finalReply)
