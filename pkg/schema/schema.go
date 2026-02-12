@@ -2,6 +2,9 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
+	"regexp"
+
 	"github.com/hjson/hjson-go/v4"
 )
 
@@ -89,7 +92,24 @@ type ResponsePacket struct {
 }
 
 func ParseResponse(data string) (*ResponsePacket, error) {
-	var resp ResponsePacket
-	err := json.Unmarshal([]byte(data), &resp)
-	return &resp, err
+	// Use non-greedy match to find individual JSON objects
+	re := regexp.MustCompile(`(?s)\{.*?\}`)
+	matches := re.FindAllString(data, -1)
+	
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no JSON found in response: %s", data)
+	}
+
+	// Try matches from last to first (latest is usually best)
+	var lastErr error
+	for i := len(matches) - 1; i >= 0; i-- {
+		var resp ResponsePacket
+		if err := json.Unmarshal([]byte(matches[i]), &resp); err == nil {
+			return &resp, nil
+		} else {
+			lastErr = err
+		}
+	}
+
+	return nil, fmt.Errorf("failed to parse any JSON block: %v. Raw: %s", lastErr, data)
 }
