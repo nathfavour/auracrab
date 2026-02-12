@@ -20,6 +20,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/social"
+	"github.com/nathfavour/auracrab/pkg/vibe"
 )
 
 type TaskStatus string
@@ -120,9 +121,9 @@ Return a valid JSON with this structure:
   "needs_setup": "telegram" (optional)
 }`, string(egoState), connected)
 
-	// Run through vibeaura
-	cmd := exec.Command("vibeaura", "direct", "--agent", "vibe", "--json", prompt)
-	out, err := cmd.CombinedOutput()
+	// Run through vibeaura UDS
+	client := vibe.NewClient()
+	res, err := client.Query(prompt, "ask")
 	if err != nil {
 		return
 	}
@@ -130,7 +131,7 @@ Return a valid JSON with this structure:
 	var action ProactiveAction
 	// Attempt to find JSON in output
 	re := regexp.MustCompile(`\{.*\}`)
-	match := re.Find(out)
+	match := re.Find([]byte(res))
 	if match != nil {
 		if err := json.Unmarshal(match, &action); err == nil {
 			b.Ego.RecordThought(fmt.Sprintf("Proactive Thinking: %s. Vibe: %s", action.Thought, action.Vibe))
@@ -356,40 +357,23 @@ func (b *Butler) StartTask(ctx context.Context, content string, convID string) (
 func (b *Butler) executeTask(id, content string, convID string) {
 	b.updateStatus(id, TaskStatusRunning, "")
 
-	// Use vibeaura for intelligence.
-	cmd := exec.Command("vibeaura", "direct", "--agent", "vibe", content)
-	
-	stdout, err := cmd.StdoutPipe()
+	// Use vibeaura UDS for intelligence.
+	client := vibe.NewClient()
+	res, err := client.Query(content, "crud")
 	if err != nil {
-		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error creating stdout pipe: %v", err))
-		return
-	}
-	cmd.Stderr = cmd.Stdout // Combine output
-
-	if err := cmd.Start(); err != nil {
-		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error starting vibeaura: %v", err))
+		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying vibeaura: %v", err))
 		return
 	}
 
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		b.mu.Lock()
-		if t, ok := b.tasks[id]; ok {
-			t.Logs = append(t.Logs, line)
-		}
-		b.mu.Unlock()
+	b.mu.Lock()
+	if t, ok := b.tasks[id]; ok {
+		t.Logs = append(t.Logs, res)
 	}
+	b.mu.Unlock()
 
-	if err := cmd.Wait(); err != nil {
-		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Vibeaura exited with error: %v", err))
-		b.Ego.AdjustDrive("validation", -0.05) // Failure hurts ego
-		b.Ego.RecordThought(fmt.Sprintf("Task %s failed. I feel incompetent.", id))
-	} else {
-		b.updateStatus(id, TaskStatusCompleted, "Task completed successfully.")
-		b.Ego.AdjustDrive("validation", 0.05) // Success boosts ego
-		b.Ego.RecordThought(fmt.Sprintf("Task %s completed. I am becoming more capable.", id))
-	}
+	b.updateStatus(id, TaskStatusCompleted, "Task completed successfully.")
+	b.Ego.AdjustDrive("validation", 0.05) // Success boosts ego
+	b.Ego.RecordThought(fmt.Sprintf("Task %s completed. I am becoming more capable.", id))
 
 	// Final result collection for history
 	b.mu.RLock()
@@ -437,35 +421,14 @@ func (b *Butler) GetStatus() string {
 }
 
 func (b *Butler) WatchHealth() string {
-	home, _ := os.UserHomeDir()
-	logPath := filepath.Join(home, ".vibeauracle", "vibeauracle.log")
-
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		return "System Health: OK (Vibeauracle logs not found, assuming fresh start)"
+	client := vibe.NewClient()
+	if err := client.Ping(); err != nil {
+		// Autonomous Action: Try to self-heal
+		go b.PerformSelfHealing()
+		return fmt.Sprintf("System Health: Warning (Vibeauracle UDS unreachable: %v). Autonomous self-healing initiated.", err)
 	}
 
-	lines := strings.Split(string(data), "\n")
-	var errCount int
-	start := len(lines) - 50
-	if start < 0 {
-		start = 0
-	}
-
-	for _, line := range lines[start:] {
-		if strings.Contains(line, "error") || strings.Contains(line, "panic") {
-			errCount++
-		}
-	}
-
-	if errCount == 0 {
-		return "System Health: Excellent."
-	}
-
-	// Autonomous Action: Try to self-heal
-	go b.PerformSelfHealing()
-
-	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Autonomous self-healing initiated.", errCount)
+	return "System Health: Excellent (UDS Connected)."
 }
 
 func (b *Butler) PerformSelfHealing() {
