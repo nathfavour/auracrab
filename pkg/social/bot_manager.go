@@ -233,6 +233,11 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 		opts.Keyboard = TelegramModeKeyboard
 	}
 	p.SendMessage(chatID, "Welcome, Boss. I am your Auracrab Gateway. I've registered you as my owner.", opts)
+	
+	bm.mu.Lock()
+	cfg.LastMessageAt = time.Now()
+	bm.mu.Unlock()
+	bm.UpdateBot(*cfg)
 }
 
 func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, onTask func(from, text string) string) bool {
@@ -309,6 +314,11 @@ func (bm *BotManager) handleShellMode(ctx context.Context, p MessengerProvider, 
 		}
 	}
 	p.SendMessage(cfg.OwnerID, resp, MessageOptions{ParseMode: ParseModeHTML})
+	
+	bm.mu.Lock()
+	cfg.LastMessageAt = time.Now()
+	bm.mu.Unlock()
+	bm.UpdateBot(*cfg)
 }
 
 func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, onTask func(from, text string) string) {

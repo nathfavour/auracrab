@@ -33,6 +33,7 @@ type ToolManifest struct {
 }
 
 type PromptPacket struct {
+	Mode      string          `json:"mode"` // "analytical" or "casual"
 	Project   ProjectTopology `json:"project"`
 	System    SystemTelemetry `json:"system"`
 	Memory    MemoryContext   `json:"memory"`
