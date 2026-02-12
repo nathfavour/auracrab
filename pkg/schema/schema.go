@@ -70,6 +70,7 @@ type ResponsePacket struct {
 	Intent         string   `json:"intent"`
 	Strategy       string   `json:"strategy"`
 	Actions        []Action `json:"actions"`
+	CasualMessage  string   `json:"casual_message,omitempty"` // For the "Taunting Friend" vibe
 	Cooldown       int      `json:"cooldown_ms"`
 	SelfCorrection string   `json:"self_correction,omitempty"`
 }
