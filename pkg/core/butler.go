@@ -330,6 +330,14 @@ func (b *Butler) Serve(ctx context.Context) error {
 	}
 	defer daemon.RemovePID()
 
+	// Check if vibeauracle is alive
+	client := vibe.NewClient()
+	if err := client.Ping(); err != nil {
+		fmt.Println("⚠️ VibeAuracle not responding. Attempting to wake up the Brain...")
+		_ = exec.Command("vibeaura", "daemon", "start").Start()
+		time.Sleep(2 * time.Second) // Give it a moment to boot
+	}
+
 	b.mu.Lock()
 	if b.running {
 		b.mu.Unlock()
