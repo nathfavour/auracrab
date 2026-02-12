@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/nathfavour/auracrab/pkg/anyisland"
 	"github.com/nathfavour/auracrab/pkg/config"
+	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -95,8 +97,17 @@ var rootCmd = &cobra.Command{
 		}()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// If no subcommand is provided, run the start command (TUI)
-		StartCmd.Run(cmd, args)
+		// Zero-command entry point: Start the autonomous heartbeat
+		fmt.Println("🦀 Auracrab is coming alive...")
+		
+		// Run the butler in continuous mode
+		ctx := context.Background()
+		butler := core.GetButler()
+		
+		if err := butler.Serve(ctx); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 

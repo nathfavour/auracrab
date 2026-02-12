@@ -15,9 +15,11 @@ import (
 	"github.com/nathfavour/auracrab/pkg/connect"
 	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/cron"
+	"github.com/nathfavour/auracrab/pkg/daemon"
 	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/social"
+	"github.com/nathfavour/auracrab/pkg/update"
 	"github.com/nathfavour/auracrab/pkg/vibe"
 )
 
@@ -139,7 +141,40 @@ Return a valid JSON with this structure:
 	}
 }
 
+func (b *Butler) PerformSelfUpdate(ctx context.Context) {
+	fmt.Println("Butler: Checking for autonomous updates...")
+	
+	hasUpdate, version, err := update.Check()
+	if err != nil {
+		fmt.Printf("Butler: Update check failed: %v\n", err)
+		return
+	}
+
+	if hasUpdate {
+		fmt.Printf("Butler: Evolving to version %s...\n", version)
+		b.Ego.RecordThought(fmt.Sprintf("I am evolving to version %s. See you on the other side.", version))
+		
+		if err := update.Apply(); err != nil {
+			fmt.Printf("Butler: Evolution failed: %v\n", err)
+			return
+		}
+		
+		// Note: Anyisland hot-swaps the binary. 
+		// If we are running as a daemon, we might need to restart.
+		// For now, assume Anyisland handles the restart if pulse is enabled.
+	}
+}
+
 func (b *Butler) Serve(ctx context.Context) error {
+	if pid, running := daemon.IsRunning(); running {
+		return fmt.Errorf("auracrab is already running (PID: %d)", pid)
+	}
+
+	if err := daemon.WritePID(); err != nil {
+		return fmt.Errorf("failed to write PID: %v", err)
+	}
+	defer daemon.RemovePID()
+
 	b.mu.Lock()
 	if b.running {
 		b.mu.Unlock()
@@ -180,6 +215,11 @@ func (b *Butler) Serve(ctx context.Context) error {
 }
 
 func (b *Butler) setupCron() {
+	// Autonomous Self-Update check via Anyisland
+	b.scheduler.Schedule("self_update", 6*time.Hour, func(ctx context.Context) {
+		b.PerformSelfUpdate(ctx)
+	})
+
 	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
 		_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
