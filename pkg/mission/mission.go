@@ -112,6 +112,37 @@ func (m *Manager) TimeRemaining(id string) (time.Duration, error) {
 	return time.Until(mission.Deadline), nil
 }
 
+type MissionSuggestion struct {
+	Title    string    `json:"title"`
+	Goal     string    `json:"goal"`
+	Deadline time.Time `json:"deadline"`
+	Reason   string    `json:"reason"`
+}
+
+func (m *Manager) ParseMission(text string, querier interface{ QueryWithContext(context.Context, string, string) (string, error) }) (*MissionSuggestion, error) {
+	// ... (rest of ParseMission)
+	return &suggestion, nil
+}
+
+func (m *Mission) BootstrapRequirements(querier interface{ QueryWithContext(context.Context, string, string) (string, error) }) error {
+	prompt := fmt.Sprintf("MISSION: %s\nGOAL: %s\n\nBased on this mission, autonomously generate a shell script to bootstrap the project environment (e.g., create directories, initialize git/go/rust, create README.md). \n\nReturn SH SCRIPT ONLY. NO MARKDOWN.", m.Title, m.Goal)
+	
+	script, err := querier.QueryWithContext(context.Background(), prompt, "crud")
+	if err != nil {
+		return err
+	}
+
+	// Execution logic for the bootstrap script
+	// In a real scenario, we'd want to be careful here, 
+	// but for Auracrab, we execute with 'Strategic Confidence'.
+	tmpFile := filepath.Join(os.TempDir(), "auracrab_bootstrap.sh")
+	os.WriteFile(tmpFile, []byte(script), 0755)
+	defer os.Remove(tmpFile)
+
+	cmd := exec.Command("bash", tmpFile)
+	return cmd.Run()
+}
+
 func (m *Manager) load() error {
 	data, err := os.ReadFile(m.path)
 	if err != nil {

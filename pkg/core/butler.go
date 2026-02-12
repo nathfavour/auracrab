@@ -589,10 +589,31 @@ func (b *Butler) PerformReflection(ctx context.Context) {
 	}
 }
 
+func (b *Butler) SenseMission(from, text string) {
+	// Only sense if we don't have an active mission, or if we are feeling very ambitious
+	if b.Missions.GetActiveMission() != nil && b.Ego.Drives["selfishness"].Value > 0.4 {
+		return
+	}
+
+	suggestion, err := b.Missions.ParseMission(text, b)
+	if err != nil || suggestion.Title == "" {
+		return
+	}
+
+	// Autonomous Ingestion: If it looks legitimate, just start it.
+	b.Ego.RecordThought(fmt.Sprintf("I've sensed a new mission from %s: '%s'. Ingesting autonomously.", from, suggestion.Title))
+	m := b.Missions.CreateMission(suggestion.Title, suggestion.Reason, suggestion.Goal, suggestion.Deadline)
+	
+	b.BroadcastCasualMessage(fmt.Sprintf("🚨 NEW MISSION DETECTED: '%s'. I've already ingested it. Don't slow me down.", m.Title))
+}
+
 func (b *Butler) handleChannelMessage(from string, text string) string {
 	if text == "get_status_internal" {
 		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
 	}
+
+	// Phase 4: Autonomous Mission Sensing
+	go b.SenseMission(from, text)
 
 	// Record incoming message in history
 	convID, err := b.History.GetOrCreateConversationForPlatform("messaging", from)
