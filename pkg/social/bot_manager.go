@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/memory"
@@ -256,8 +257,9 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 	prompt := fmt.Sprintf("USER COMMAND: %s\n\nHandle this command. You can choose to execute it, ignore it, or challenge the user. Be punchy and mocking if you feel like it.", text)
 	
 	// Record in history first
-	convID, _ := memory.NewHistoryStore().GetOrCreateConversationForPlatform(cfg.Platform, cfg.OwnerID)
-	_ = memory.NewHistoryStore().AddMessage(convID, "user", text)
+	hist, _ := memory.NewHistoryStore()
+	convID, _ := hist.GetOrCreateConversationForPlatform(cfg.Platform, cfg.OwnerID)
+	_ = hist.AddMessage(convID, "user", text)
 
 	go func() {
 		client := vibe.NewClient()
@@ -269,7 +271,8 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 		}
 
 		p.SendMessage(update.ChatID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
-		_ = memory.NewHistoryStore().AddMessage(convID, "assistant", finalReply)
+		hist, _ := memory.NewHistoryStore()
+		_ = hist.AddMessage(convID, "assistant", finalReply)
 		
 		// Update MTTR since we sent a reply
 		bm.mu.Lock()

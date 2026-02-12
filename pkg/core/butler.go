@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -191,7 +192,7 @@ func (b *Butler) GatherProjectTopology() schema.ProjectTopology {
 
 func (b *Butler) GatherSystemTelemetry() schema.SystemTelemetry {
 	return schema.SystemTelemetry{
-		OS:          config.PAL.OS(),
+		OS:          runtime.GOOS,
 		CPUUsage:    0.1, // Placeholder
 		MemoryUsage: 0.2, // Placeholder
 		EnergyLevel: 1.0, // Fully charged
