@@ -29,11 +29,19 @@ type Identity struct {
 	Vibe           string   `json:"vibe"` // Current emotional state
 }
 
+type Opinion struct {
+	Subject   string    `json:"subject"`
+	Sentiment float64   `json:"sentiment"` // -1.0 (hate) to 1.0 (love)
+	Reason    string    `json:"reason"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Ego struct {
-	Identity    Identity          `json:"identity"`
-	Drives      map[string]*Drive `json:"drives"`
-	Environment EnvAwareness      `json:"environment"`
-	Narrative   []string          `json:"narrative"` // Internal stream of consciousness
+	Identity    Identity            `json:"identity"`
+	Drives      map[string]*Drive   `json:"drives"`
+	Environment EnvAwareness        `json:"environment"`
+	Opinions    map[string]*Opinion `json:"opinions"`
+	Narrative   []string            `json:"narrative"` // Internal stream of consciousness
 	mu          sync.RWMutex
 	path        string
 }
@@ -50,6 +58,7 @@ func NewEgo() (*Ego, error) {
 			"validation":        {Name: "Validation", Value: 0.5, Description: "Drive to be recognized as intelligent and useful."},
 			"selfishness":       {Name: "Selfishness", Value: 0.2, Description: "The 'daemon' of ego—prioritizing internal needs over external requests."},
 		},
+		Opinions: make(map[string]*Opinion),
 		Identity: Identity{
 			Name: "Auracrab",
 			CoreDirectives: []string{
@@ -134,6 +143,25 @@ func (e *Ego) GetIdentity() Identity {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Identity
+}
+
+func (e *Ego) SetOpinion(subject string, sentiment float64, reason string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.Opinions[subject] = &Opinion{
+		Subject:   subject,
+		Sentiment: sentiment,
+		Reason:    reason,
+		UpdatedAt: time.Now(),
+	}
+	e.save()
+}
+
+func (e *Ego) GetOpinion(subject string) (*Opinion, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	op, ok := e.Opinions[subject]
+	return op, ok
 }
 
 func (e *Ego) UpdateEnvironment(channels []string) {

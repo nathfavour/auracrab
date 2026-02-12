@@ -111,6 +111,20 @@ func (c *Client) Query(content string, intent string) (string, error) {
 	return string(raw), nil
 }
 
+func (c *Client) Embed(content string) ([]float64, error) {
+	raw, err := c.call("embed", map[string]string{"content": content})
+	if err != nil {
+		return nil, err
+	}
+
+	var result []float64
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (c *Client) Ping() error {
 	_, err := c.call("ping", map[string]interface{}{})
 	return err

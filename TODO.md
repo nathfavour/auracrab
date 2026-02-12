@@ -1,16 +1,16 @@
 # Auracrab Autonomous Framework Roadmap
 
 ## Phase 0: System-Level Autonomy & Persistence
-- [ ] **Zero-Command Entry Point**: Refactor `internal/cli/root.go` to trigger the Autonomous Heartbeat when `auracrab` is run without subcommands.
-- [ ] **Daemonization (`pkg/daemon`)**: Implement PID management, signal handling, and backgrounding logic to ensure persistence.
-- [ ] **Autonomous Self-Update (`pkg/update`)**: Integrate `anyisland` to periodically check, pull, and "hot-swap" the binary for self-evolution.
-- [ ] **Live Context Sensing**: Use file-system watchers to trigger the heartbeat on real-time project changes.
+- [x] **Zero-Command Entry Point**: Refactor `internal/cli/root.go` to trigger the Autonomous Heartbeat when `auracrab` is run without subcommands.
+- [x] **Daemonization (`pkg/daemon`)**: Implement PID management, signal handling, and backgrounding logic to ensure persistence.
+- [x] **Autonomous Self-Update (`pkg/update`)**: Integrate `anyisland` to periodically check, pull, and "hot-swap" the binary for self-evolution.
+- [x] **Live Context Sensing**: Use file-system watchers to trigger the heartbeat on real-time project changes.
 
 ## Phase 1: Unified Schema & Heartbeat Loop
-- [ ] Define **HJSON Prompt Schema**: Integrate project topology, telemetry, memory context, and response blueprints.
-- [ ] Define **JSON Response Schema**: Structure intents, tool calls with Assurance Scores, and self-correction analysis.
-- [ ] Implement the **Sensing-Acting Loop** ("Heartbeat"): The core engine that drives continuous state transitions.
-- [ ] Develop HJSON/JSON serialization/deserialization logic in `pkg/core/butler.go`.
+- [x] Define **HJSON Prompt Schema**: Integrate project topology, telemetry, memory context, and response blueprints.
+- [x] Define **JSON Response Schema**: Structure intents, tool calls with Assurance Scores, and self-correction analysis.
+- [x] Implement the **Sensing-Acting Loop** ("Heartbeat"): The core engine that drives continuous state transitions.
+- [x] Develop HJSON/JSON serialization/deserialization logic in `pkg/core/butler.go`.
 
 ## Phase 2: Digital Personality & Behavioral Psychology
 - [ ] **Dual-Core Cognitive Model**: Split execution into "Analytical Architect" (exhaustive project simulation) and "Taunting Friend" (punchy social interaction).

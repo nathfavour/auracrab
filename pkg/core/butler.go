@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -18,9 +19,11 @@ import (
 	"github.com/nathfavour/auracrab/pkg/daemon"
 	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/schema"
 	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/update"
 	"github.com/nathfavour/auracrab/pkg/vibe"
+	"github.com/nathfavour/auracrab/pkg/watcher"
 )
 
 type TaskStatus string
@@ -59,8 +62,10 @@ type Butler struct {
 	scheduler *cron.Scheduler
 	Memory    *memory.Store
 	History   *memory.HistoryStore
+	Grievances *memory.VectorStore
 	Ego       *ego.Ego
 	proactive chan ProactiveAction
+	watcher   *watcher.Watcher
 }
 
 var (
@@ -165,6 +170,94 @@ func (b *Butler) PerformSelfUpdate(ctx context.Context) {
 	}
 }
 
+func (b *Butler) GatherProjectTopology() schema.ProjectTopology {
+	var files []string
+	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil { return nil }
+		if !info.IsDir() && !strings.HasPrefix(path, ".") {
+			files = append(files, path)
+		}
+		if len(files) > 50 { return filepath.SkipDir } // Limit snapshot
+		return nil
+	})
+
+	return schema.ProjectTopology{
+		Files: files,
+		// ModifiedRecently and Dependencies would be filled with real logic
+	}
+}
+
+func (b *Butler) GatherSystemTelemetry() schema.SystemTelemetry {
+	return schema.SystemTelemetry{
+		OS:          config.PAL.OS(),
+		CPUUsage:    0.1, // Placeholder
+		MemoryUsage: 0.2, // Placeholder
+		EnergyLevel: 1.0, // Fully charged
+	}
+}
+
+func (b *Butler) GatherMemoryContext() schema.MemoryContext {
+	return schema.MemoryContext{
+		RecentActions: []string{}, // To be filled from History
+		EgoState:      b.Ego.Identity.Vibe,
+	}
+}
+
+func (b *Butler) GetToolManifests() []schema.ToolManifest {
+	// For now, return a static list. In Phase 2, this will be dynamic.
+	return []schema.ToolManifest{
+		{Name: "read_file", Description: "Read content of a file", Parameters: `{"path": "string"}`},
+		{Name: "write_file", Description: "Write content to a file", Parameters: `{"path": "string", "content": "string"}`},
+		{Name: "run_command", Description: "Run a shell command", Parameters: `{"command": "string"}`},
+	}
+}
+
+func (b *Butler) PerformHeartbeat(ctx context.Context) {
+	fmt.Println("Butler: Pulsing Heartbeat...")
+	
+	packet := schema.PromptPacket{
+		Project:   b.GatherProjectTopology(),
+		System:    b.GatherSystemTelemetry(),
+		Memory:    b.GatherMemoryContext(),
+		Tools:     b.GetToolManifests(),
+		Blueprint: "Return a JSON ResponsePacket with intent, strategy, and actions.",
+	}
+
+	hjsonPrompt, err := packet.ToHjson()
+	if err != nil {
+		fmt.Printf("Butler: Failed to generate HJSON prompt: %v\n", err)
+		return
+	}
+
+	client := vibe.NewClient()
+	res, err := client.Query(hjsonPrompt, "agent")
+	if err != nil {
+		fmt.Printf("Butler: Heartbeat query failed: %v\n", err)
+		return
+	}
+
+	resp, err := schema.ParseResponse(res)
+	if err != nil {
+		fmt.Printf("Butler: Failed to parse LLM response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Butler: Strategic Intent: %s\n", resp.Intent)
+	
+	// Execute high-assurance actions
+	for _, action := range resp.Actions {
+		if action.AssuranceScore > 0.8 {
+			fmt.Printf("Butler: Executing tool %s with score %.2f\n", action.Tool, action.AssuranceScore)
+			// Execution logic would go here
+		}
+	}
+
+	// Schedule next heartbeat based on cooldown
+	if resp.Cooldown > 0 {
+		time.Sleep(time.Duration(resp.Cooldown) * time.Millisecond)
+	}
+}
+
 func (b *Butler) Serve(ctx context.Context) error {
 	if pid, running := daemon.IsRunning(); running {
 		return fmt.Errorf("auracrab is already running (PID: %d)", pid)
@@ -201,11 +294,39 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Start Social Bots (POC Migration)
 	social.GetBotManager().StartBots(ctx, b.History, b.handleChannelMessage)
 
+	// Start File System Watcher
+	w, err := watcher.NewWatcher(func(path string) {
+		fmt.Printf("Butler: Detected change in %s. Triggering heartbeat...\n", path)
+		// Spontaneous Heartbeat logic will go here in Phase 2
+		// For now, we just perform proactive thinking
+		b.PerformProactiveThinking(ctx)
+	})
+	if err == nil {
+		b.watcher = w
+		cwd, _ := os.Getwd()
+		_ = b.watcher.Start(ctx, cwd)
+		defer b.watcher.Close()
+	}
+
 	// Initial health check
 	fmt.Println(b.WatchHealth())
 
 	// Start scheduler
 	go b.scheduler.Start(ctx)
+
+	// Heartbeat Loop
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute) // Default heartbeat
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				b.PerformHeartbeat(ctx)
+			}
+		}
+	}()
 
 	<-ctx.Done()
 	b.mu.Lock()
