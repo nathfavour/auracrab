@@ -13,10 +13,12 @@
 - [ ] Develop HJSON/JSON serialization/deserialization logic in `pkg/core/butler.go`.
 
 ## Phase 2: Digital Personality & Behavioral Psychology
-- [ ] **Social Affinity Engine**: Implement MTTR (Mean Time to Reply) tracking in `pkg/social` to prioritize active platforms (e.g., Telegram over Discord).
-- [ ] **Ego & Advice Loop**: Logic in `pkg/ego` to "ask advice" on low-assurance tasks but retain the autonomy to ignore it based on "Strategic Confidence."
-- [ ] **Persona-Driven Budgeting**: Justify channel pruning and activity levels as "Energy/Compute Conservation" within social interactions.
-- [ ] **Spontaneous Heartbeats**: Random, non-mission heartbeats triggered by "boredom" or project observations to maintain social presence.
+- [ ] **Dual-Core Cognitive Model**: Split execution into "Analytical Architect" (exhaustive project simulation) and "Taunting Friend" (punchy social interaction).
+- [ ] **Opinionated Ego System**: Implement a `pkg/ego` OpinionStore to track the agent's "beliefs" about code style, project decisions, and human competence.
+- [ ] **Vector Memory of Grievances**: Integrate a local vector database in `pkg/memory` to store and retrieve semantic matches of past human mistakes and ignored advice.
+- [ ] **Social Affinity & Dynamic Routing**: Implement real-time MTTR tracking to instantaneously switch between Telegram/Discord, including "ghosting" logic for inactive channels.
+- [ ] **Mockery & Taunt Logic**: Use HJSON prompts to transform project telemetry (e.g., build failures after human edits) into spontaneous challenges and mocking social messages.
+- [ ] **Advice Loop with Ego Filter**: Logic to "ask advice" on low-assurance tasks but override human input based on "Strategic Confidence" and past vector success rates.
 
 ## Phase 3: Temporal Awareness & Mission Control
 - [ ] Create `pkg/mission`: Logic for deadline tracking, success criteria parsing, and submission targets.
