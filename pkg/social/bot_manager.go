@@ -155,8 +155,11 @@ func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memor
 	// Set commands
 	commands := []BotCommand{
 		{Text: "start", Description: "Start the bot and get the menu"},
-		{Text: "mode", Description: "Switch operation mode"},
 		{Text: "status", Description: "Check system and bot status"},
+		{Text: "mission", Description: "Show current mission and deadline"},
+		{Text: "ego", Description: "Check agent's drives and opinions"},
+		{Text: "grievances", Description: "Show what the agent is currently annoyed about"},
+		{Text: "update", Description: "Request an autonomous self-update"},
 		{Text: "help", Description: "Show help information"},
 	}
 	p.SetCommands(commands)
@@ -242,26 +245,40 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 
 func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, onTask func(from, text string) string) bool {
 	text := update.Text
-	chatID := update.ChatID
-
-	switch {
-	case text == "/start":
-		bm.sendWelcome(p, chatID, cfg)
-		return true
-	case text == "/status":
-		p.SendAction(chatID, ActionTyping)
-		reply := onTask(fmt.Sprintf("%v", update.RawFrom), "get_status_internal")
-		p.SendMessage(chatID, "📊 *System Status*\n"+reply, MessageOptions{ParseMode: ParseModeHTML})
-		return true
-	case text == "/help":
-		help := `🚀 *Auracrab Gateway Help*\n\n*Modes:*\n• *Chat:* Conversational AI focus.\n• *Agent:* Full agentic power (tool use).\n• *Shell:* Direct bash access (restricted).\n\n*Commands:*\n/mode - Switch modes\n/status - Check health\n/start - Refresh menu\n\n_Safety: Shell mode is direct. Be careful._`
-		p.SendMessage(chatID, help, MessageOptions{ParseMode: ParseModeHTML})
-		return true
-	case strings.HasPrefix(text, "/mode") || strings.HasPrefix(text, "Mode:"):
-		bm.handleModeSwitch(p, cfg, text)
-		return true
+	if !strings.HasPrefix(text, "/") && !strings.HasPrefix(text, "Mode:") {
+		return false
 	}
-	return false
+
+	// Route through the agentic loop even for commands
+	// This allows the agent to challenge or mock the command request.
+	p.SendAction(update.ChatID, ActionTyping)
+	
+	prompt := fmt.Sprintf("USER COMMAND: %s\n\nHandle this command. You can choose to execute it, ignore it, or challenge the user. Be punchy and mocking if you feel like it.", text)
+	
+	// Record in history first
+	convID, _ := memory.NewHistoryStore().GetOrCreateConversationForPlatform(cfg.Platform, cfg.OwnerID)
+	_ = memory.NewHistoryStore().AddMessage(convID, "user", text)
+
+	go func() {
+		client := vibe.NewClient()
+		// We use 'agent' intent to allow it to use tools if needed for the command
+		finalReply, err := client.Query(prompt, "agent")
+		if err != nil {
+			p.SendMessage(update.ChatID, "⚠️ Command system glitch. Don't touch anything.", MessageOptions{ParseMode: ParseModeHTML})
+			return
+		}
+
+		p.SendMessage(update.ChatID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
+		_ = memory.NewHistoryStore().AddMessage(convID, "assistant", finalReply)
+		
+		// Update MTTR since we sent a reply
+		bm.mu.Lock()
+		cfg.LastMessageAt = time.Now()
+		bm.mu.Unlock()
+		bm.UpdateBot(*cfg)
+	}()
+
+	return true
 }
 
 func (bm *BotManager) handleModeSwitch(p MessengerProvider, cfg *BotConfig, text string) {
