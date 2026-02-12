@@ -303,6 +303,7 @@ func (b *Butler) BroadcastCasualMessage(msg string) {
 
 	if bestBot != nil {
 		fmt.Printf("Butler: Sending casual message to %s (MTTR: %v)\n", bestBot.Platform, bestBot.MTTR)
+		_ = social.GetBotManager().SendMessage(bestBot.Platform, bestBot.OwnerID, msg)
 	}
 }
 

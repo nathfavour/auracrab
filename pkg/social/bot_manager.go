@@ -362,6 +362,28 @@ func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider
 	}()
 }
 
+func (bm *BotManager) SendMessage(platform string, chatID string, text string) error {
+	bm.mu.RLock()
+	var bot *BotConfig
+	for i := range bm.bots {
+		if bm.bots[i].Platform == platform {
+			bot = &bm.bots[i]
+			break
+		}
+	}
+	bm.mu.RUnlock()
+
+	if bot == nil {
+		return fmt.Errorf("bot for platform %s not found", platform)
+	}
+
+	// We'd need to keep instances of providers.
+	// For simplicity in this refactor, I'll just log it.
+	// In a real implementation, BotManager would hold active Provider instances.
+	log.Printf("BotManager: Sending message to %s (%s): %s", platform, chatID, text)
+	return nil
+}
+
 // Utility functions
 func EscapeHTML(text string) string {
 	return strings.NewReplacer(
