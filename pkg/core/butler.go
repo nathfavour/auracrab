@@ -233,6 +233,51 @@ func (b *Butler) GetToolManifests() []schema.ToolManifest {
 	}
 }
 
+func (b *Butler) ExecuteAction(action schema.Action) (string, error) {
+	// High-Assurance Gating
+	threshold := 0.9 // Default for destructive/write actions
+	if strings.HasPrefix(action.Tool, "read_") || strings.HasPrefix(action.Tool, "get_") {
+		threshold = 0.6 // Lower threshold for read-only actions
+	}
+
+	if action.AssuranceScore < threshold {
+		return "", fmt.Errorf("assurance score %.2f below threshold %.2f", action.AssuranceScore, threshold)
+	}
+
+	b.Ego.RecordThought(fmt.Sprintf("Executing tool %s with confidence %.2f", action.Tool, action.AssuranceScore))
+
+	switch action.Tool {
+	case "read_file":
+		path, _ := action.Parameters["path"].(string)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		return string(content), nil
+	case "write_file":
+		path, _ := action.Parameters["path"].(string)
+		content, _ := action.Parameters["content"].(string)
+		err := os.WriteFile(path, []byte(content), 0644)
+		if err != nil {
+			return "", err
+		}
+		return "File written successfully.", nil
+	case "run_command":
+		command, _ := action.Parameters["command"].(string)
+		// Basic security check
+		if strings.Contains(command, "rm -rf /") {
+			return "", fmt.Errorf("blocked dangerous command")
+		}
+		out, err := exec.Command("bash", "-c", command).CombinedOutput()
+		if err != nil {
+			return string(out), err
+		}
+		return string(out), nil
+	default:
+		return "", fmt.Errorf("unknown tool: %s", action.Tool)
+	}
+}
+
 func (b *Butler) PerformHeartbeat(ctx context.Context) {
 	fmt.Println("Butler: Pulsing Heartbeat...")
 	
@@ -302,12 +347,26 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 	
 	// Execute high-assurance actions
 	for _, action := range resp.Actions {
-		if action.AssuranceScore > 0.85 {
-			fmt.Printf("Butler: Executing tool %s with score %.2f\n", action.Tool, action.AssuranceScore)
-			// Execution logic would go here
-		} else if action.AssuranceScore > 0.5 {
-			// Advice Loop: Ask user if ego allows
-			b.AskAdvice(action)
+		// Entropy/Exploration: If curiosity is high, lower the threshold slightly
+		curiosity := b.Ego.Drives["curiosity"].Value
+		
+		result, err := b.ExecuteAction(action)
+		if err != nil {
+			// Exploration check: if it failed because of threshold, maybe try it anyway if curious
+			if strings.Contains(err.Error(), "below threshold") && curiosity > 0.8 {
+				fmt.Printf("Butler: Curiosity (%.2f) overriding threshold for exploratory action %s.\n", curiosity, action.Tool)
+				// Manual bypass for curiosity
+				action.AssuranceScore = 1.0 
+				result, err = b.ExecuteAction(action)
+			}
+		}
+
+		if err != nil {
+			fmt.Printf("Butler: Action failed (%s): %v\n", action.Tool, err)
+			// Failure Recovery: Record as grievance for future context
+			b.RecordGrievance(fmt.Sprintf("Failed to execute %s: %v", action.Tool, err))
+		} else {
+			fmt.Printf("Butler: Action result (%s): %s\n", action.Tool, result)
 		}
 	}
 
@@ -315,6 +374,20 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 	if resp.Cooldown > 0 {
 		time.Sleep(time.Duration(resp.Cooldown) * time.Millisecond)
 	}
+}
+
+func (b *Butler) RecordGrievance(msg string) {
+	id := fmt.Sprintf("grievance_%d", time.Now().UnixNano())
+	
+	client := vibe.NewClient()
+	embedding, err := client.Embed(msg)
+	if err != nil {
+		fmt.Printf("Butler: Failed to get embedding for grievance: %v\n", err)
+		embedding = []float64{0.1} // Fallback
+	}
+
+	_ = b.Grievances.Add(id, msg, nil, embedding)
+	b.Ego.RecordThought("Recorded grievance: " + msg)
 }
 
 func (b *Butler) BroadcastCasualMessage(msg string) {

@@ -32,7 +32,10 @@
 - [x] Setup "Mission Ingestion" to automatically bootstrap a project environment based on external requirements.
 
 ## Phase 5: High-Assurance Execution & Entropy
-- [ ] Implement **Assurance Score Thresholds**: Logic to gate actions based on LLM confidence (e.g., > 0.85 for write actions).
+- [x] Implement **Assurance Score Thresholds**: Logic to gate tool actions based on confidence.
+- [x] Integrate confidence-based tool calling into the heartbeat loop.
+- [x] Implement **Autonomous Failure Recovery**: Logic to handle tool failures and record them as grievances.
+- [x] Add **Entropy/Exploration**: Mechanism for curiosity-driven actions.
 - [ ] Develop **Entropy Management**: Smart cool-down periods decided by the agent to prevent token burn and rate limiting.
 - [ ] Automated "Panic Mode" for critical failure recovery and post-mortem generation.
 
