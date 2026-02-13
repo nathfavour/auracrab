@@ -138,6 +138,22 @@ func (d *DiscordChannel) Stop() error {
 	return nil
 }
 
+func (d *DiscordChannel) Broadcast(message string) error {
+	if d.session == nil || d.history == nil {
+		return fmt.Errorf("discord session not initialized")
+	}
+
+	channels, err := d.history.ListAuthorizedEntities("discord")
+	if err != nil {
+		return err
+	}
+
+	for _, channelID := range channels {
+		_, _ = d.session.ChannelMessageSend(channelID, message)
+	}
+	return nil
+}
+
 func init() {
 	// Discord will be registered in init.go if token is present
 }
