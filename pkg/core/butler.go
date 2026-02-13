@@ -22,6 +22,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/mission"
 	"github.com/nathfavour/auracrab/pkg/schema"
+	"github.com/nathfavour/auracrab/pkg/security"
 	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/update"
 	"github.com/nathfavour/auracrab/pkg/vibe"
@@ -67,6 +68,7 @@ type Butler struct {
 	Grievances *memory.VectorStore
 	Ego       *ego.Ego
 	Missions  *mission.Manager
+	Ephemeral memory.EphemeralStore
 	proactive chan ProactiveAction
 	watcher   *watcher.Watcher
 }
@@ -86,6 +88,7 @@ func GetButler() *Butler {
 		grievances, _ := memory.NewVectorStore("grievances")
 		myEgo, _ := ego.NewEgo()
 		missions, _ := mission.NewManager()
+		ephemeral := memory.NewSimpleEphemeralStore()
 
 		instance = &Butler{
 			tasks:     make(map[string]*Task),
@@ -97,6 +100,7 @@ func GetButler() *Butler {
 			Grievances: grievances,
 			Ego:       myEgo,
 			Missions:  missions,
+			Ephemeral: ephemeral,
 			proactive: make(chan ProactiveAction, 10),
 		}
 		instance.load()
@@ -227,12 +231,24 @@ func (b *Butler) GatherMemoryContext() schema.MemoryContext {
 	active := b.Missions.GetActiveMission()
 	if active != nil {
 		tr, _ := b.Missions.TimeRemaining(active.ID)
+		
+		var subTasks []schema.SubTaskInfo
+		for _, t := range active.Tasks {
+			subTasks = append(subTasks, schema.SubTaskInfo{
+				ID:           t.ID,
+				Title:        t.Title,
+				Status:       string(t.Status),
+				Dependencies: t.Dependencies,
+			})
+		}
+
 		ctx.Mission = &schema.MissionInfo{
 			Title:         active.Title,
 			Goal:          active.Goal,
 			TimeRemaining: tr.Round(time.Minute).String(),
 			Progress:      active.Progress,
 			TTC:           active.EstimatedTTC.String(),
+			SubTasks:      subTasks,
 		}
 	}
 
@@ -244,7 +260,7 @@ func (b *Butler) GetToolManifests() []schema.ToolManifest {
 	return []schema.ToolManifest{
 		{Name: "read_file", Description: "Read content of a file", Parameters: `{"path": "string"}`},
 		{Name: "write_file", Description: "Write content to a file", Parameters: `{"path": "string", "content": "string"}`},
-		{Name: "run_command", Description: "Run a shell command", Parameters: `{"command": "string"}`},
+		{Name: "run_command", Description: "Run a shell command", Parameters: `{"command": "string", "sandbox": "boolean"}`},
 	}
 }
 
@@ -279,7 +295,13 @@ func (b *Butler) ExecuteAction(action schema.Action) (string, error) {
 		return "File written successfully.", nil
 	case "run_command":
 		command, _ := action.Parameters["command"].(string)
-		// Basic security check
+		useSandbox, _ := action.Parameters["sandbox"].(bool)
+
+		if useSandbox {
+			return security.RunInSandbox(context.Background(), command, "")
+		}
+
+		// Basic security check for non-sandboxed commands
 		if strings.Contains(command, "rm -rf /") {
 			return "", fmt.Errorf("blocked dangerous command")
 		}
@@ -355,6 +377,17 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 				ttc, _ = time.ParseDuration(*resp.EstimatedTTC)
 			}
 			_ = b.Missions.UpdateProgress(active.ID, *resp.MissionProgress, ttc)
+		}
+
+		// Handle DAG sub-tasks
+		for _, nt := range resp.NewSubTasks {
+			b.Ego.RecordThought(fmt.Sprintf("Adding new sub-task: %s", nt.Title))
+			active.AddSubTask(nt.Title, nt.Description, nt.Dependencies)
+		}
+
+		if resp.UpdateSubTask != nil {
+			b.Ego.RecordThought(fmt.Sprintf("Updating sub-task %s to %s", resp.UpdateSubTask.ID, resp.UpdateSubTask.Status))
+			_ = active.UpdateSubTaskStatus(resp.UpdateSubTask.ID, mission.Status(resp.UpdateSubTask.Status), resp.UpdateSubTask.Result)
 		}
 
 		if resp.Finalize {

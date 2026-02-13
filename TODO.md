@@ -29,7 +29,7 @@
 ## Phase 4: Autonomous Sensing & Ingestion
 - [x] Enhance `pkg/social`: Monitor Discord/Telegram/Files for external mission triggers.
 - [x] Implement **Autonomous Fetching**: Use `browser_skill` or shell commands to download requirements, assets, and third-party documentation.
-- [ ] Implement **Delta Detection**: Logic to detect specific changes in the environment (e.g., git diffs, file content shifts) to trigger targeted re-evaluation.
+- [x] Implement **Delta Detection**: Logic to detect specific changes in the environment (e.g., git diffs, file content shifts) to trigger targeted re-evaluation.
 - [x] Setup "Mission Ingestion" to automatically bootstrap a project environment based on external requirements.
 
 ## Phase 5: High-Assurance Execution & Entropy
@@ -37,7 +37,7 @@
 - [x] Integrate confidence-based tool calling into the heartbeat loop.
 - [x] Implement **Autonomous Failure Recovery**: Logic to handle tool failures and record them as grievances.
 - [x] Add **Entropy/Exploration**: Mechanism for curiosity-driven actions.
-- [ ] **Docker Sandboxing**: Integrate Docker for isolated and safe code execution environments.
+- [x] **Docker Sandboxing**: Integrate Docker for isolated and safe code execution environments.
 - [ ] Develop **Entropy Management**: Smart cool-down periods decided by the agent to prevent token burn and rate limiting.
 - [ ] Automated "Panic Mode" for critical failure recovery and post-mortem generation.
 
@@ -49,8 +49,8 @@
 - [x] **Post-Mission Hibernation**: Transition to adaptive resource conservation after successful delivery.
 
 ## Phase 7: Advanced Cognitive Infrastructure
-- [ ] **DAG-based Planning**: Transition from flat tasks to a Directed Acyclic Graph (DAG) for complex mission sub-tasks.
-- [ ] **Redis Ephemeral Memory**: Integrate Redis for high-frequency state checks and ephemeral heartbeat data.
+- [x] **DAG-based Planning**: Transition from flat tasks to a Directed Acyclic Graph (DAG) for complex mission sub-tasks.
+- [x] **Redis Ephemeral Memory**: Integrate Redis for high-frequency state checks and ephemeral heartbeat data.
 - [ ] **Advanced Orchestration**: Refine Go channels and concurrency for multi-step logic and heartbeat synchronization.
-- [ ] **Headless Browser Execution**: Integrate Playwright or Puppeteer for interacting with complex SPAs and websites without APIs.
+- [x] **Headless Browser Execution**: Integrate Playwright or Puppeteer for interacting with complex SPAs and websites without APIs. (Using Google Chrome headless)
 - [ ] **OAuth2.0 Flow Handlers**: Implement standardized OAuth2.0 handlers for broader social and platform authentication.

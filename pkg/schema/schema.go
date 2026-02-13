@@ -37,6 +37,14 @@ type MissionInfo struct {
 	TimeRemaining string `json:"time_remaining"`
 	Progress      float64 `json:"progress"`
 	TTC           string  `json:"estimated_ttc"`
+	SubTasks      []SubTaskInfo `json:"sub_tasks,omitempty"`
+}
+
+type SubTaskInfo struct {
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	Status       string   `json:"status"`
+	Dependencies []string `json:"dependencies"`
 }
 
 type ToolManifest struct {
@@ -88,9 +96,23 @@ type ResponsePacket struct {
 	SelfCorrection string   `json:"self_correction,omitempty"`
 
 	// Autonomous mission management
-	MissionProgress *float64 `json:"mission_progress,omitempty"`
-	EstimatedTTC    *string  `json:"estimated_ttc,omitempty"` // e.g. "2h45m"
-	Finalize        bool     `json:"finalize,omitempty"`
+	MissionProgress *float64       `json:"mission_progress,omitempty"`
+	EstimatedTTC    *string        `json:"estimated_ttc,omitempty"` // e.g. "2h45m"
+	Finalize        bool           `json:"finalize,omitempty"`
+	NewSubTasks     []NewSubTask   `json:"new_sub_tasks,omitempty"`
+	UpdateSubTask   *UpdateSubTask `json:"update_sub_task,omitempty"`
+}
+
+type NewSubTask struct {
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Dependencies []string `json:"dependencies"`
+}
+
+type UpdateSubTask struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
 }
 
 func ParseResponse(data string) (*ResponsePacket, error) {
