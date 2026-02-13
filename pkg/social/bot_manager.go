@@ -36,6 +36,7 @@ type BotConfig struct {
 	Platform string  `json:"platform"` // "telegram", "discord"
 	OwnerID  string  `json:"owner_id,omitempty"`
 	Mode     BotMode `json:"mode,omitempty"`
+	Verbose  bool    `json:"verbose,omitempty"`
 	
 	// Social Affinity Metrics
 	MTTR          time.Duration `json:"mttr,omitempty"`
@@ -255,6 +256,18 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 
 func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, querier ContextualQuerier, onTask func(from, text string) string) bool {
 	text := update.Text
+
+	if text == "/verbose" {
+		cfg.Verbose = !cfg.Verbose
+		bm.UpdateBot(*cfg)
+		status := "OFF"
+		if cfg.Verbose {
+			status = "ON"
+		}
+		p.SendMessage(update.ChatID, fmt.Sprintf("📢 Verbose mode is now %s.", status), MessageOptions{})
+		return true
+	}
+
 	if !strings.HasPrefix(text, "/") && !strings.HasPrefix(text, "Mode:") {
 		return false
 	}
@@ -372,6 +385,19 @@ func (bm *BotManager) SendMessage(platform string, chatID string, text string) e
 	}
 
 	return p.SendMessage(chatID, text, MessageOptions{ParseMode: ParseModeHTML})
+}
+
+func (bm *BotManager) BroadcastLog(text string) {
+	bm.mu.RLock()
+	defer bm.mu.RUnlock()
+
+	for _, cfg := range bm.bots {
+		if cfg.Verbose && cfg.OwnerID != "" {
+			if p, ok := bm.providers[cfg.Platform]; ok {
+				_ = p.SendMessage(cfg.OwnerID, "📝 [Log] "+text, MessageOptions{ParseMode: ParseModeHTML})
+			}
+		}
+	}
 }
 
 // Utility functions

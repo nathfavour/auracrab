@@ -94,7 +94,7 @@ func GetButler() *Butler {
 			tasks:     make(map[string]*Task),
 			stateDir:  stateDir,
 			registry:  reg,
-			scheduler: cron.NewScheduler(),
+			scheduler: cron.NewScheduler(config.CronPath()),
 			Memory:    mem,
 			History:   hist,
 			Grievances: grievances,
@@ -274,9 +274,11 @@ func (b *Butler) ExecuteAction(action schema.Action) (string, error) {
 	}
 
 	if action.AssuranceScore < threshold {
+		social.GetBotManager().BroadcastLog(fmt.Sprintf("⚠️ Action %s blocked (Confidence %.2f < %.2f)", action.Tool, action.AssuranceScore, threshold))
 		return "", fmt.Errorf("assurance score %.2f below threshold %.2f", action.AssuranceScore, threshold)
 	}
 
+	social.GetBotManager().BroadcastLog(fmt.Sprintf("🛠️ Executing: %s", action.Tool))
 	b.Ego.RecordThought(fmt.Sprintf("Executing tool %s with confidence %.2f", action.Tool, action.AssuranceScore))
 
 	switch action.Tool {
@@ -585,27 +587,60 @@ func (b *Butler) Serve(ctx context.Context) error {
 }
 
 func (b *Butler) PerformSensing(ctx context.Context) {
-	fmt.Println("Butler: Sensing environment for signals...")
+	social.GetBotManager().BroadcastLog("🔍 Sensing environment for signals...")
 
 	// 1. Detect TODO.md for sub-tasks
 	if data, err := os.ReadFile("TODO.md"); err == nil {
 		b.Ego.RecordThought("Sensed TODO.md. Looking for mission alignment.")
-		// We could parse this and update mission progress or tasks
+		social.GetBotManager().BroadcastLog("Found TODO.md - Analyzing tasks.")
 		_ = data // Placeholder
 	}
 
 	// 2. Detect project type for specialized agent engagement
 	if _, err := os.Stat("go.mod"); err == nil {
 		b.Ego.RecordThought("Confirmed Go project. I'll prioritize Golang-optimized strategies.")
+		social.GetBotManager().BroadcastLog("Go project detected.")
 	} else if _, err := os.Stat("package.json"); err == nil {
 		b.Ego.RecordThought("Node.js project detected. Adjusting cognitive focus.")
+		social.GetBotManager().BroadcastLog("Node.js project detected.")
 	}
+}
+
+func (b *Butler) ReadTheRoom(ctx context.Context) {
+	social.GetBotManager().BroadcastLog("📖 Reading the room...")
+	
+	// Check for README context
+	if _, err := os.Stat("README.md"); err == nil {
+		social.GetBotManager().BroadcastLog("Context: Project has documentation (README.md).")
+	}
+
+	// Check for testing culture
+	hasTests := false
+	testDirs := []string{"tests", "test", "spec", "internal/test"}
+	for _, d := range testDirs {
+		if _, err := os.Stat(d); err == nil {
+			hasTests = true
+			break
+		}
+	}
+	if hasTests {
+		social.GetBotManager().BroadcastLog("Context: Project has a testing structure.")
+	} else {
+		social.GetBotManager().BroadcastLog("Context: No standard test directory found. I should be careful.")
+	}
+
+	b.Ego.RecordThought("Finished reading the room. I have a better understanding of this environment.")
 }
 
 func (b *Butler) setupCron() {
 	// Autonomous Self-Update check via Anyisland
 	b.scheduler.Schedule("self_update", 6*time.Hour, func(ctx context.Context) {
 		b.PerformSelfUpdate(ctx)
+	})
+
+	// Periodic room reading
+	b.scheduler.Schedule("read_the_room", 1*time.Hour, func(ctx context.Context) {
+		b.ReadTheRoom(ctx)
 	})
 
 	// Periodic system sanity Check
@@ -810,7 +845,17 @@ func (b *Butler) SenseMission(from, text string) {
 
 func (b *Butler) handleChannelMessage(from string, text string) string {
 	if text == "get_status_internal" {
-		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
+		verbose := "OFF"
+		bots := social.GetBotManager().ListBots()
+		for _, bc := range bots {
+			if bc.OwnerID == from {
+				if bc.Verbose {
+					verbose = "ON"
+				}
+				break
+			}
+		}
+		return fmt.Sprintf("%s\n%s\nVerbosity: %s", b.GetStatus(), b.WatchHealth(), verbose)
 	}
 
 	// Phase 4: Autonomous Mission Sensing

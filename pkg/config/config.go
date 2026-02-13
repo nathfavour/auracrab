@@ -34,6 +34,11 @@ func TasksPath() string {
 	return filepath.Join(DataDir(), "tasks.json")
 }
 
+// CronPath returns the path to the cron persistence file
+func CronPath() string {
+	return filepath.Join(DataDir(), "cron.json")
+}
+
 // CrabsDir returns the path to the specialized agents directory
 func CrabsDir() string {
 	path := filepath.Join(DataDir(), "crabs")
