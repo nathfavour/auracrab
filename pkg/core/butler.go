@@ -629,17 +629,27 @@ func (b *Butler) Serve(ctx context.Context) error {
 func (b *Butler) PerformSensing(ctx context.Context) {
 	social.GetBotManager().BroadcastLog("🔍 Sensing environment for signals...")
 
-	// 1. Detect hackathon/project files
-	if _, err := os.Stat("skill.md"); err == nil {
-		b.Ego.RecordThought("Sensed a skill.md file. This might be a Colosseum hackathon or a specialized environment. I should investigate.")
-		social.GetBotManager().BroadcastLog("Found skill.md - Detecting project context.")
-	}
+	// 1. Analyze all Markdown files for context
+	matches, _ := filepath.Glob("*.md")
+	for _, match := range matches {
+		data, err := os.ReadFile(match)
+		if err != nil {
+			continue
+		}
 
-	// 2. Detect TODO.md for sub-tasks
-	if data, err := os.ReadFile("TODO.md"); err == nil {
-		b.Ego.RecordThought("Sensed TODO.md. Looking for mission alignment.")
-		social.GetBotManager().BroadcastLog("Found TODO.md - Analyzing tasks.")
-		_ = data // Placeholder
+		content := string(data)
+		peek := content
+		if len(peek) > 300 {
+			peek = peek[:300] + "..."
+		}
+
+		b.Ego.RecordThought(fmt.Sprintf("Sensed markdown file '%s'. Content peek: %s", match, peek))
+		social.GetBotManager().BroadcastLog(fmt.Sprintf("Analyzed %s for project context.", match))
+
+		// Special logic for TODO.md still helpful for mission alignment
+		if match == "TODO.md" {
+			b.Ego.RecordThought("Detected TODO.md. I will use this to track human-defined tasks and align them with my mission.")
+		}
 	}
 
 	// 2. Detect project type for specialized agent engagement
