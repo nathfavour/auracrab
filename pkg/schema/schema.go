@@ -89,6 +89,7 @@ type ResponsePacket struct {
 	// Autonomous mission management
 	MissionProgress *float64 `json:"mission_progress,omitempty"`
 	EstimatedTTC    *string  `json:"estimated_ttc,omitempty"` // e.g. "2h45m"
+	Finalize        bool     `json:"finalize,omitempty"`
 }
 
 func ParseResponse(data string) (*ResponsePacket, error) {

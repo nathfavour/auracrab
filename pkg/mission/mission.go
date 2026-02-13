@@ -148,15 +148,59 @@ func (m *Mission) BootstrapRequirements(querier interface{ QueryWithContext(cont
 		return err
 	}
 
-	// Execution logic for the bootstrap script
-	// In a real scenario, we'd want to be careful here, 
-	// but for Auracrab, we execute with 'Strategic Confidence'.
 	tmpFile := filepath.Join(os.TempDir(), "auracrab_bootstrap.sh")
 	os.WriteFile(tmpFile, []byte(script), 0755)
 	defer os.Remove(tmpFile)
 
 	cmd := exec.Command("bash", tmpFile)
 	return cmd.Run()
+}
+
+func (m *Mission) PreFlightCheck(querier interface{ QueryWithContext(context.Context, string, string) (string, error) }) (string, error) {
+	prompt := fmt.Sprintf("MISSION: %s\nGOAL: %s\n\nGenerate a shell script to perform a comprehensive pre-flight check for this mission. It should run tests, linting, and verify the build. \n\nReturn SH SCRIPT ONLY. NO MARKDOWN.", m.Title, m.Goal)
+	
+	script, err := querier.QueryWithContext(context.Background(), prompt, "crud")
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile := filepath.Join(os.TempDir(), "auracrab_preflight.sh")
+	os.WriteFile(tmpFile, []byte(script), 0755)
+	defer os.Remove(tmpFile)
+
+	out, err := exec.Command("bash", tmpFile).CombinedOutput()
+	return string(out), err
+}
+
+func (m *Mission) FinalizeMission(querier interface{ QueryWithContext(context.Context, string, string) (string, error) }) (string, error) {
+	prompt := fmt.Sprintf("MISSION: %s\nGOAL: %s\n\nGenerate a shell script to finalize and deliver this mission. This might involve committing and pushing to git, uploading artifacts, or sending a completion signal. \n\nReturn SH SCRIPT ONLY. NO MARKDOWN.", m.Title, m.Goal)
+	
+	script, err := querier.QueryWithContext(context.Background(), prompt, "crud")
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile := filepath.Join(os.TempDir(), "auracrab_finalize.sh")
+	os.WriteFile(tmpFile, []byte(script), 0755)
+	defer os.Remove(tmpFile)
+
+	out, err := exec.Command("bash", tmpFile).CombinedOutput()
+	return string(out), err
+}
+
+func (m *Manager) CompleteMission(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	mission, ok := m.missions[id]
+	if !ok {
+		return os.ErrNotExist
+	}
+
+	mission.Status = StatusCompleted
+	mission.Progress = 1.0
+	mission.UpdatedAt = time.Now()
+	return m.save()
 }
 
 func (m *Manager) load() error {

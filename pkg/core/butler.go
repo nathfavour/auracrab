@@ -341,6 +341,10 @@ func (b *Butler) PerformHeartbeat(ctx context.Context) {
 			}
 			_ = b.Missions.UpdateProgress(active.ID, *resp.MissionProgress, ttc)
 		}
+
+		if resp.Finalize {
+			go b.PerformMissionClosing(ctx, active)
+		}
 	}
 
 	fmt.Printf("Butler: Strategic Intent: %s\n", resp.Intent)
@@ -614,6 +618,35 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 	return client.Query(hjsonPrompt, intent)
 }
 
+func (b *Butler) PerformMissionClosing(ctx context.Context, m *mission.Mission) {
+	b.Ego.RecordThought(fmt.Sprintf("Initiating closing sequence for mission: %s", m.Title))
+	b.BroadcastCasualMessage(fmt.Sprintf("🏁 Mission '%s' is nearly done. Starting pre-flight checks. Don't touch anything.", m.Title))
+
+	// 1. Pre-Flight Check
+	out, err := m.PreFlightCheck(b)
+	if err != nil {
+		b.Ego.RecordThought(fmt.Sprintf("Pre-flight check failed for %s: %v", m.Title, err))
+		b.RecordGrievance(fmt.Sprintf("Pre-flight failure: %s", out))
+		b.BroadcastCasualMessage(fmt.Sprintf("❌ Pre-flight check failed for '%s'. I'll need to fix some things first.", m.Title))
+		return
+	}
+	b.Ego.RecordThought("Pre-flight check passed.")
+
+	// 2. Finalize/Submit
+	b.BroadcastCasualMessage(fmt.Sprintf("🚀 Delivering mission '%s'...", m.Title))
+	fOut, fErr := m.FinalizeMission(b)
+	if fErr != nil {
+		b.Ego.RecordThought(fmt.Sprintf("Finalization failed for %s: %v", m.Title, fErr))
+		b.RecordGrievance(fmt.Sprintf("Finalization failure: %s", fOut))
+		return
+	}
+
+	// 3. Mark as Complete
+	_ = b.Missions.CompleteMission(m.ID)
+	b.Ego.RecordThought(fmt.Sprintf("Mission %s successfully closed.", m.Title))
+	b.BroadcastCasualMessage(fmt.Sprintf("✅ Mission '%s' is COMPLETE. I've delivered it and verified everything. I'm taking a nap (hibernating).", m.Title))
+}
+
 func (b *Butler) PerformMissionAudit(ctx context.Context) {
 	active := b.Missions.GetActiveMission()
 	if active == nil {
@@ -627,6 +660,8 @@ func (b *Butler) PerformMissionAudit(ctx context.Context) {
 		b.Ego.RecordThought(fmt.Sprintf("URGENT: Mission '%s' is behind schedule. TR: %v, TTC: %v. I need to focus.", active.Title, tr, active.EstimatedTTC))
 		b.Ego.AdjustDrive("selfishness", 0.1)
 		b.BroadcastCasualMessage(fmt.Sprintf("⚠️ WARNING: We are behind on mission '%s'. I'm cutting off distractions.", active.Title))
+	} else if active.Progress >= 1.0 {
+		go b.PerformMissionClosing(ctx, active)
 	} else if active.Progress > 0.9 {
 		b.Ego.RecordThought(fmt.Sprintf("Mission '%s' is nearly complete. I feel a sense of accomplishment.", active.Title))
 		b.Ego.AdjustDrive("validation", 0.05)
