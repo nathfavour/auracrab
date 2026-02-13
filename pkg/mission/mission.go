@@ -22,6 +22,15 @@ const (
 	StatusAbandoned Status = "abandoned"
 )
 
+type SubTask struct {
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Status       Status   `json:"status"`
+	Dependencies []string `json:"dependencies"` // IDs of other sub-tasks
+	Result       string   `json:"result,omitempty"`
+}
+
 type Mission struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
@@ -31,7 +40,10 @@ type Mission struct {
 	Status      Status    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	
+
+	// Sub-tasks for DAG-based orchestration
+	Tasks []SubTask `json:"tasks"`
+
 	// Temporal Awareness metrics
 	EstimatedTTC time.Duration `json:"estimated_ttc"` // Time To Complete
 	Progress     float64       `json:"progress"`      // 0.0 to 1.0
