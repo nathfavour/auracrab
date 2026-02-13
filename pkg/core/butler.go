@@ -208,6 +208,7 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 }
 
 func (b *Butler) handleChannelMessage(platform, chatID, from, text string) string {
+	fmt.Printf("Butler: Received message from %s on %s: %s\n", from, platform, text)
 	if text == "get_status_internal" {
 		return b.GetStatus() + "\n" + b.WatchHealth()
 	}
@@ -245,34 +246,40 @@ func (b *Butler) processQueue(ctx context.Context) {
 			return
 		case msg := <-b.highQueue:
 			b.processMessage(msg)
-		default:
-			select {
-			case msg := <-b.highQueue:
-				b.processMessage(msg)
-			case msg := <-b.normalQueue:
-				b.processMessage(msg)
-			default:
-				select {
-				case msg := <-b.highQueue:
-					b.processMessage(msg)
-				case msg := <-b.normalQueue:
-					b.processMessage(msg)
-				case msg := <-b.lowQueue:
-					b.processMessage(msg)
-				case <-time.After(100 * time.Millisecond):
-					// Sleep briefly if no messages
-				}
-			}
+		case msg := <-b.normalQueue:
+			b.processMessage(msg)
+		case msg := <-b.lowQueue:
+			b.processMessage(msg)
+		case <-time.After(100 * time.Millisecond):
+			// Keep loop alive
 		}
 	}
 }
 
 func (b *Butler) processMessage(msg QueuedMessage) {
+	fmt.Printf("Butler: Processing message from %s [%s]: %s\n", msg.From, msg.Platform, msg.Text)
+
 	// Send "Thinking..." heartbeat
 	b.sendUpdate(msg.Platform, msg.ChatID, "Thinking...")
 
 	// Record incoming message in history
 	convID, err := b.History.GetOrCreateConversationForPlatform(msg.Platform, msg.ChatID)
+	
+	// Fetch conversation history for context BEFORE adding current message
+	historyText := ""
+	if convID != "" {
+		history, _ := b.History.GetHistory(convID)
+		// Only take last 10 messages for context window safety
+		start := len(history) - 10
+		if start < 0 {
+			start = 0
+		}
+		for _, m := range history[start:] {
+			historyText += fmt.Sprintf("%s: %s\n", strings.ToUpper(m.Role), m.Content)
+		}
+	}
+
+	// Now add the current message to history
 	if err == nil {
 		_ = b.History.AddMessage(convID, "user", msg.Text)
 	}
@@ -308,24 +315,35 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 			intent = "chat"
 		}
 
+		// Add system context
+		cwd, _ := os.Getwd()
+		files, _ := filepath.Glob("*")
+		if len(files) > 25 {
+			files = files[:25]
+		}
+		dirSnapshot := strings.Join(files, "\n")
+		if dirSnapshot == "" {
+			dirSnapshot = "(no files discovered)"
+		}
+
+		promptWithContext := fmt.Sprintf(
+			"AURACRAB_SYSTEM_CONTEXT\nWORKING_DIRECTORY: %s\nFILES:\n%s\n\nCONVERSATION_HISTORY:\n%s\n\nCURRENT_USER_MESSAGE: %s",
+			cwd,
+			dirSnapshot,
+			historyText,
+			msg.Text,
+		)
+
 		client := vibe.NewClient()
-		stream, err := client.QueryStream(msg.Text, intent)
+		stream, err := client.QueryStream(promptWithContext, intent)
 		if err != nil {
 			reply = fmt.Sprintf("Error starting stream: %v", err)
 			cancel()
 		} else {
 			var fullReply strings.Builder
-			lastUpdate := time.Now()
 			
 			for delta := range stream {
 				fullReply.WriteString(delta)
-				if time.Since(lastUpdate) > 5*time.Second {
-					// Periodic heartbeat with partial result if it's long
-					// For Telegram/Discord, we might not want to spam too many messages.
-					// But for now, let's just send "Still working..." or partial if it's reasonable.
-					// b.sendUpdate(msg.Platform, msg.ChatID, "Working... " + delta)
-					lastUpdate = time.Now()
-				}
 			}
 			cancel()
 			reply = fullReply.String()
@@ -340,6 +358,7 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 	}
 
 	// Send final reply
+	fmt.Printf("Butler: Sending reply to %s: %s\n", msg.From, reply)
 	b.sendUpdate(msg.Platform, msg.ChatID, reply)
 }
 
@@ -349,12 +368,18 @@ func (b *Butler) sendUpdate(platform, chatID, text string) {
 	b.mu.RUnlock()
 
 	if ok {
-		_ = ch.Send(chatID, text)
-		return
+		err := ch.Send(chatID, text)
+		if err == nil {
+			return
+		}
+		fmt.Printf("Butler: Channel Send failed for %s, falling back: %v\n", platform, err)
 	}
 
-	// Fallback to social bot manager if not a direct channel
-	_ = social.GetBotManager().SendMessage(platform, chatID, text)
+	// Fallback to social bot manager if not a direct channel or if direct channel failed
+	err := social.GetBotManager().SendMessage(platform, chatID, text)
+	if err != nil {
+		fmt.Printf("Butler: All send attempts failed for %s: %v\n", platform, err)
+	}
 }
 
 func (b *Butler) load() {
