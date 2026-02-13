@@ -129,7 +129,7 @@ func (bm *BotManager) UpdateBot(cfg BotConfig) error {
 	return fmt.Errorf("bot not found")
 }
 
-func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
+func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStore, querier ContextualQuerier, onTask func(platform, chatID, from, text string) string) {
 	bm.mu.RLock()
 	bots := make([]BotConfig, len(bm.bots))
 	copy(bots, bm.bots)
@@ -140,7 +140,7 @@ func (bm *BotManager) StartBots(ctx context.Context, history *memory.HistoryStor
 	}
 }
 
-func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
+func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memory.HistoryStore, querier ContextualQuerier, onTask func(platform, chatID, from, text string) string) {
 	var p MessengerProvider
 	var err error
 
@@ -254,7 +254,7 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 	bm.UpdateBot(*cfg)
 }
 
-func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, querier ContextualQuerier, onTask func(from, text string) string) bool {
+func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update, querier ContextualQuerier, onTask func(platform, chatID, from, text string) string) bool {
 	text := update.Text
 
 	if text == "/verbose" {
@@ -362,12 +362,14 @@ func (bm *BotManager) handleShellMode(ctx context.Context, p MessengerProvider, 
 	bm.UpdateBot(*cfg)
 }
 
-func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
+func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, querier ContextualQuerier, onTask func(platform, chatID, from, text string) string) {
 	p.SendAction(cfg.OwnerID, ActionTyping)
 
 	// Use the task handler which manages the butler state
-	reply := onTask(cfg.OwnerID, text)
-	p.SendMessage(cfg.OwnerID, reply, MessageOptions{ParseMode: ParseModeHTML})
+	reply := onTask(cfg.Platform, cfg.OwnerID, cfg.OwnerID, text)
+	if reply != "" {
+		p.SendMessage(cfg.OwnerID, reply, MessageOptions{ParseMode: ParseModeHTML})
+	}
 
 	bm.mu.Lock()
 	cfg.LastMessageAt = time.Now()

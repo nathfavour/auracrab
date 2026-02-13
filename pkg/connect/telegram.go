@@ -27,7 +27,7 @@ func (t *TelegramChannel) Name() string {
 	return "telegram"
 }
 
-func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string, text string) string) error {
+func (t *TelegramChannel) Start(ctx context.Context, onMessage func(platform string, chatID string, from string, text string) string) error {
 	home, _ := os.UserHomeDir()
 	t.stateDir = filepath.Join(home, ".local", "share", "auracrab", "telegram")
 	_ = os.MkdirAll(t.stateDir, 0755)
@@ -140,7 +140,7 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 						// We need a way to get status. onMessage is usually for tasks.
 						// For now, we can use onMessage with a special prefix or just handle it here if we had access to butler.
 						// But Start only gets onMessage.
-						reply := onMessage(from, "get_status_internal") // Hacky way if butler handles it
+						reply := onMessage("telegram", chatIDStr, from, "get_status_internal") // Hacky way if butler handles it
 						msg := tgbotapi.NewMessage(chatID, "📊 *System Status*\n"+reply)
 						msg.ParseMode = "Markdown"
 						bot.Send(msg)
@@ -155,11 +155,17 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 
 				if !isAllowed {
 					log.Printf("Ignored message from unauthorized chat: %d", chatID)
+					msg := tgbotapi.NewMessage(chatID, "🚫 *Access Denied*\n\nThis chat is not authorized to interact with this Auracrab instance. Please contact the owner to authorize this Chat ID.")
+					msg.ParseMode = "Markdown"
+					_, _ = bot.Send(msg)
 					continue
 				}
 
 				// Dispatch to Butler
-				reply := onMessage(from, text)
+				reply := onMessage("telegram", chatIDStr, from, text)
+				if reply == "" {
+					continue
+				}
 				if len(reply) > 4000 {
 					reply = reply[:3997] + "..."
 				}
@@ -181,6 +187,24 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(from string,
 func (t *TelegramChannel) Stop() error {
 	t.saveOffset()
 	return nil
+}
+
+func (t *TelegramChannel) Send(to string, text string) error {
+	if t.bot == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+
+	var chatID int64
+	_, err := fmt.Sscanf(to, "%d", &chatID)
+	if err != nil {
+		// If 'to' is not an ID, maybe it's a username? 
+		// tgbotapi doesn't easily support sending by username without a ChatID.
+		return fmt.Errorf("invalid chat ID: %s", to)
+	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	_, err = t.bot.Send(msg)
+	return err
 }
 
 func (t *TelegramChannel) Broadcast(message string) error {

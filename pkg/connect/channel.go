@@ -7,8 +7,9 @@ import (
 // Channel defines an integration surface like Telegram, Discord, or Signal.
 type Channel interface {
 	Name() string
-	Start(ctx context.Context, onMessage func(from string, text string) string) error
+	Start(ctx context.Context, onMessage func(platform string, chatID string, from string, text string) string) error
 	Stop() error
+	Send(to string, text string) error
 	Broadcast(message string) error
 }
 

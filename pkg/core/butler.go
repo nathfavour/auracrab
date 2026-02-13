@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -40,6 +41,24 @@ type Task struct {
 	EndedAt   time.Time  `json:"ended_at,omitempty"`
 }
 
+type Priority int
+
+const (
+	PriorityLow Priority = iota
+	PriorityNormal
+	PriorityHigh
+	PriorityCritical
+)
+
+type QueuedMessage struct {
+	Platform string
+	ChatID   string
+	From     string
+	Text     string
+	Priority Priority
+	Received time.Time
+}
+
 type Butler struct {
 	tasks     map[string]*Task
 	mu        sync.RWMutex
@@ -51,6 +70,11 @@ type Butler struct {
 	History   *memory.HistoryStore
 	Missions  *mission.Manager
 	Ego       *ego.Ego
+	channels  map[string]connect.Channel
+	
+	highQueue   chan QueuedMessage
+	normalQueue chan QueuedMessage
+	lowQueue    chan QueuedMessage
 }
 
 var (
@@ -69,14 +93,18 @@ func GetButler() *Butler {
 		eg, _ := ego.NewEgo()
 
 		instance = &Butler{
-			tasks:     make(map[string]*Task),
-			stateDir:  stateDir,
-			registry:  reg,
-			scheduler: cron.NewScheduler(),
-			Memory:    mem,
-			History:   hist,
-			Missions:  miss,
-			Ego:       eg,
+			tasks:       make(map[string]*Task),
+			stateDir:    stateDir,
+			registry:    reg,
+			scheduler:   cron.NewScheduler(),
+			Memory:      mem,
+			History:     hist,
+			Missions:    miss,
+			Ego:         eg,
+			channels:    make(map[string]connect.Channel),
+			highQueue:   make(chan QueuedMessage, 50),
+			normalQueue: make(chan QueuedMessage, 100),
+			lowQueue:    make(chan QueuedMessage, 100),
 		}
 		instance.load()
 		instance.setupCron()
@@ -94,12 +122,18 @@ func (b *Butler) Serve(ctx context.Context) error {
 	b.mu.Unlock()
 
 	// Start integrations
-	channels := connect.GetChannels()
-	if len(channels) == 0 {
+	chans := connect.GetChannels()
+	if len(chans) == 0 {
 		fmt.Println("Butler: No messaging channels (Telegram/Discord) configured.")
 	}
 
-	for _, ch := range channels {
+	b.mu.Lock()
+	for name, ch := range chans {
+		b.channels[name] = ch
+	}
+	b.mu.Unlock()
+
+	for _, ch := range chans {
 		go func(c connect.Channel) {
 			err := c.Start(ctx, b.handleChannelMessage)
 			if err != nil {
@@ -110,6 +144,9 @@ func (b *Butler) Serve(ctx context.Context) error {
 
 	// Start Social Bots (POC Migration)
 	social.GetBotManager().StartBots(ctx, b.History, b, b.handleChannelMessage)
+
+	// Start queue processor
+	go b.processQueue(ctx)
 
 	// Initial health check
 	fmt.Println(b.WatchHealth())
@@ -127,7 +164,7 @@ func (b *Butler) Serve(ctx context.Context) error {
 func (b *Butler) setupCron() {
 	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
-		_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
+		_, _ = b.StartTask(context.Background(), "run security audit and log results to ~/.auracrab/audits.log", "")
 	})
 
 	// Memory sync or cleanup can happen here
@@ -158,7 +195,10 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 	client := vibe.NewClient()
 	reply, err := client.Query(customPrompt, intent)
 	if err != nil {
-		return "", err
+		// Fallback to HeuristicSynthesizer if vibeauracle is offline
+		fmt.Printf("Vibeauracle error, using heuristic fallback: %v\n", err)
+		heuristic := vibe.NewHeuristicSynthesizer()
+		return heuristic.Synthesize(prompt), nil
 	}
 	reply = strings.TrimSpace(reply)
 	if reply == "" {
@@ -167,19 +207,79 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 	return reply, nil
 }
 
-func (b *Butler) handleChannelMessage(from string, text string) string {
+func (b *Butler) handleChannelMessage(platform, chatID, from, text string) string {
 	if text == "get_status_internal" {
-		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
+		return b.GetStatus() + "\n" + b.WatchHealth()
 	}
+
+	priority := PriorityNormal
+	if strings.Contains(strings.ToLower(text), "urgent") || strings.Contains(strings.ToLower(text), "critical") {
+		priority = PriorityHigh
+	}
+
+	msg := QueuedMessage{
+		Platform: platform,
+		ChatID:   chatID,
+		From:     from,
+		Text:     text,
+		Priority: priority,
+		Received: time.Now(),
+	}
+
+	switch priority {
+	case PriorityHigh, PriorityCritical:
+		b.highQueue <- msg
+	case PriorityNormal:
+		b.normalQueue <- msg
+	default:
+		b.lowQueue <- msg
+	}
+
+	return ""
+}
+
+func (b *Butler) processQueue(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-b.highQueue:
+			b.processMessage(msg)
+		default:
+			select {
+			case msg := <-b.highQueue:
+				b.processMessage(msg)
+			case msg := <-b.normalQueue:
+				b.processMessage(msg)
+			default:
+				select {
+				case msg := <-b.highQueue:
+					b.processMessage(msg)
+				case msg := <-b.normalQueue:
+					b.processMessage(msg)
+				case msg := <-b.lowQueue:
+					b.processMessage(msg)
+				case <-time.After(100 * time.Millisecond):
+					// Sleep briefly if no messages
+				}
+			}
+		}
+	}
+}
+
+func (b *Butler) processMessage(msg QueuedMessage) {
+	// Send "Thinking..." heartbeat
+	b.sendUpdate(msg.Platform, msg.ChatID, "Thinking...")
 
 	// Record incoming message in history
-	convID, err := b.History.GetOrCreateConversationForPlatform("messaging", from)
+	convID, err := b.History.GetOrCreateConversationForPlatform(msg.Platform, msg.ChatID)
 	if err == nil {
-		_ = b.History.AddMessage(convID, "user", text)
+		_ = b.History.AddMessage(convID, "user", msg.Text)
 	}
 
-	if strings.HasPrefix(text, "@") {
-		parts := strings.SplitN(text, " ", 2)
+	var reply string
+	if strings.HasPrefix(msg.Text, "@") {
+		parts := strings.SplitN(msg.Text, " ", 2)
 		if len(parts) > 1 {
 			crabID := strings.TrimPrefix(parts[0], "@")
 			if c, err := b.registry.Get(crabID); err == nil {
@@ -187,28 +287,74 @@ func (b *Butler) handleChannelMessage(from string, text string) string {
 				augmentedTask := fmt.Sprintf("CRAB AGENT: %s\nINSTRUCTIONS: %s\n\nUSER TASK: %s", c.Name, c.Instructions, parts[1])
 				task, err := b.StartTask(context.Background(), augmentedTask, convID)
 				if err != nil {
-					return fmt.Sprintf("Error starting delegated task: %v", err)
+					reply = fmt.Sprintf("Error starting delegated task: %v", err)
+				} else {
+					reply = fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
 				}
-				reply := fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
-				if err == nil {
-					_ = b.History.AddMessage(convID, "assistant", reply)
-				}
-				return reply
 			}
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
+	if reply == "" {
+		_, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		
+		intent := "vibe"
+		lowerText := strings.ToLower(msg.Text)
+		if strings.HasPrefix(lowerText, "create") || strings.HasPrefix(lowerText, "update") || 
+		   strings.HasPrefix(lowerText, "delete") || strings.HasPrefix(lowerText, "list") ||
+		   strings.Contains(lowerText, "task") {
+			intent = "crud"
+		} else if msg.Platform == "telegram" || msg.Platform == "discord" {
+			intent = "chat"
+		}
 
-	reply, err := b.QueryWithContext(ctx, text, "vibe")
-	if err != nil {
-		return fmt.Sprintf("Error processing prompt: %v", err)
+		client := vibe.NewClient()
+		stream, err := client.QueryStream(msg.Text, intent)
+		if err != nil {
+			reply = fmt.Sprintf("Error starting stream: %v", err)
+			cancel()
+		} else {
+			var fullReply strings.Builder
+			lastUpdate := time.Now()
+			
+			for delta := range stream {
+				fullReply.WriteString(delta)
+				if time.Since(lastUpdate) > 5*time.Second {
+					// Periodic heartbeat with partial result if it's long
+					// For Telegram/Discord, we might not want to spam too many messages.
+					// But for now, let's just send "Still working..." or partial if it's reasonable.
+					// b.sendUpdate(msg.Platform, msg.ChatID, "Working... " + delta)
+					lastUpdate = time.Now()
+				}
+			}
+			cancel()
+			reply = fullReply.String()
+			if reply == "" {
+				reply = "Empty response from vibeauracle."
+			}
+		}
 	}
+
 	if convID != "" {
 		_ = b.History.AddMessage(convID, "assistant", reply)
 	}
-	return reply
+
+	// Send final reply
+	b.sendUpdate(msg.Platform, msg.ChatID, reply)
+}
+
+func (b *Butler) sendUpdate(platform, chatID, text string) {
+	b.mu.RLock()
+	ch, ok := b.channels[platform]
+	b.mu.RUnlock()
+
+	if ok {
+		_ = ch.Send(chatID, text)
+		return
+	}
+
+	// Fallback to social bot manager if not a direct channel
+	_ = social.GetBotManager().SendMessage(platform, chatID, text)
 }
 
 func (b *Butler) load() {
@@ -312,6 +458,16 @@ func (b *Butler) GetStatus() string {
 
 func (b *Butler) WatchHealth() string {
 	home, _ := os.UserHomeDir()
+	
+	// Check if vibeauracle socket is responsive
+	client := vibe.NewClient()
+	err := client.Ping()
+	if err != nil {
+		fmt.Printf("Butler: Vibeauracle socket unresponsive, attempting restart: %v\n", err)
+		go b.restartVibeaura()
+		return "System Health: Warning (Vibeauracle unresponsive). Self-healing initiated."
+	}
+
 	logPath := filepath.Join(home, ".vibeauracle", "vibeauracle.log")
 
 	data, err := os.ReadFile(logPath)
@@ -336,6 +492,25 @@ func (b *Butler) WatchHealth() string {
 		return "System Health: Excellent."
 	}
 	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura doctor'.", errCount)
+}
+
+func (b *Butler) restartVibeaura() {
+	fmt.Println("Butler: Restarting vibeaura daemon...")
+	// Try to stop it first just in case
+	_ = exec.Command("vibeaura", "stop").Run()
+	time.Sleep(1 * time.Second)
+	
+	// Start it
+	cmd := exec.Command("vibeaura", "start")
+	err := cmd.Start()
+	if err != nil {
+		fmt.Printf("Butler: Failed to restart vibeaura: %v\n", err)
+		return
+	}
+	
+	// Wait a bit for it to initialize
+	time.Sleep(3 * time.Second)
+	fmt.Println("Butler: Vibeaura restart attempt completed.")
 }
 
 func (b *Butler) ListTasks() []*Task {
