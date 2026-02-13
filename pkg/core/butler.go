@@ -175,25 +175,10 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 		intent = "vibe"
 	}
 
-	cwd, _ := os.Getwd()
-	files, _ := filepath.Glob("*")
-	if len(files) > 25 {
-		files = files[:25]
-	}
-	dirSnapshot := strings.Join(files, "\n")
-	if dirSnapshot == "" {
-		dirSnapshot = "(no files discovered)"
-	}
-
-	customPrompt := fmt.Sprintf(
-		"AURACRAB_CUSTOM_PROMPT_TEMPLATE\nWORKING_DIRECTORY:\n%s\n\nPROJECT_FILES_SNAPSHOT:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
-		cwd,
-		dirSnapshot,
-		prompt,
-	)
+	fullPrompt := b.buildPrompt(prompt, "")
 
 	client := vibe.NewClient()
-	reply, err := client.Query(customPrompt, intent)
+	reply, err := client.Query(fullPrompt, intent)
 	if err != nil {
 		// Fallback to HeuristicSynthesizer if vibeauracle is offline
 		fmt.Printf("Vibeauracle error, using heuristic fallback: %v\n", err)
@@ -205,6 +190,26 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 		return "", fmt.Errorf("empty response from vibeauracle")
 	}
 	return reply, nil
+}
+
+func (b *Butler) buildPrompt(userMessage string, historyText string) string {
+	cwd, _ := os.Getwd()
+	files, _ := filepath.Glob("*")
+	if len(files) > 25 {
+		files = files[:25]
+	}
+	dirSnapshot := strings.Join(files, "\n")
+	if dirSnapshot == "" {
+		dirSnapshot = "(no files discovered)"
+	}
+
+	return fmt.Sprintf(
+		"AURACRAB_SYSTEM_CONTEXT\nWORKING_DIRECTORY: %s\nPROJECT_FILES_SNAPSHOT:\n%s\n\nCONVERSATION_HISTORY:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
+		cwd,
+		dirSnapshot,
+		historyText,
+		userMessage,
+	)
 }
 
 func (b *Butler) handleChannelMessage(platform, chatID, from, text string) string {
