@@ -27,7 +27,7 @@ func (s *BrowserSkill) Manifest() []byte {
 			"properties": {
 				"action": {
 					"type": "string",
-					"enum": ["open", "scrape", "scrape_headless"]
+					"enum": ["open", "scrape"]
 				},
 				"url": {
 					"type": "string"
@@ -58,23 +58,9 @@ func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (strin
 			return "", fmt.Errorf("missing url")
 		}
 		return s.scrape(params.URL)
-	case "scrape_headless":
-		if params.URL == "" {
-			return "", fmt.Errorf("missing url")
-		}
-		return s.scrapeHeadless(params.URL)
 	default:
 		return "", fmt.Errorf("unknown action: %s", params.Action)
 	}
-}
-
-func (s *BrowserSkill) scrapeHeadless(url string) (string, error) {
-	cmd := exec.Command("google-chrome", "--headless", "--disable-gpu", "--dump-dom", "--no-sandbox", url)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
 }
 
 func (s *BrowserSkill) open(url string) (string, error) {

@@ -17,7 +17,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
-	"github.com/nathfavour/auracrab/pkg/anyisland"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/nathfavour/auracrab/pkg/skills"
@@ -97,29 +96,27 @@ var (
 
 type tickMsg time.Time
 
-type proactiveMsg core.ProactiveAction
-
 type Model struct {
-	tasks          []*core.Task
-	cursor         int
-	statusMsg      string
-	healthMsg      string
-	skillsList     []string
-	width          int
-	height         int
-	ready          bool
-	input          textinput.Model
-	viewport       viewport.Model
-	banner         string
-	lastResponse   string
-	isCapturing    bool
-	updateStatus   string
+	tasks        []*core.Task
+	cursor       int
+	statusMsg    string
+	healthMsg    string
+	skillsList   []string
+	width        int
+	height       int
+	ready        bool
+	input        textinput.Model
+	viewport     viewport.Model
+	banner       string
+	lastResponse string
+	isCapturing  bool
+	updateStatus string
 	// History fields
 	commandHistory []string
 	historyIndex   int
 	// Suggestion fields
-	suggestions    []string
-	suggestionIdx  int
+	suggestions   []string
+	suggestionIdx int
 	// Config mode fields
 	isConfiguring  bool
 	configSteps    []configStep
@@ -175,13 +172,7 @@ func InitialModel() Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tick(), waitForProactive(core.GetButler().GetProactiveChannel()))
-}
-
-func waitForProactive(ch <-chan core.ProactiveAction) tea.Cmd {
-	return func() tea.Msg {
-		return proactiveMsg(<-ch)
-	}
+	return tick()
 }
 
 func tick() tea.Cmd {
@@ -295,14 +286,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, tick()
 
-	case proactiveMsg:
-		m.lastResponse = fmt.Sprintf("[%s] %s", msg.Vibe, msg.Message)
-		if msg.NeedsSetup != "" {
-			// Trigger setup mode proactively!
-			return m.handleSetupCommand(msg.NeedsSetup)
-		}
-		return m, waitForProactive(core.GetButler().GetProactiveChannel())
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -397,7 +380,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					// Always enable if setting up
 					_ = v.Set(strings.ToUpper(m.configuringFor)+"_ENABLED", "true")
-					
+
 					m.configValues = make(map[string]string) // Clear sensitive values from memory
 					m.lastResponse = fmt.Sprintf("✅ Setup for %s completed. Restart the daemon to apply changes.", m.configuringFor)
 					m.input.Placeholder = "Enter task or /command..."
@@ -781,7 +764,7 @@ func (m Model) View() string {
 	if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
 		selectedTask := m.tasks[m.cursor]
 		view.WriteString("\n" + styleSectionTitle.Render("TASK LOGS: "+selectedTask.ID) + "\n")
-		
+
 		if len(selectedTask.Logs) == 0 {
 			m.viewport.SetContent(styleFooter.Render("  No logs available yet..."))
 		} else {
@@ -867,22 +850,6 @@ func gradientWord(word string, colors []lipgloss.Color, spaced bool) string {
 }
 
 func (m Model) takeScreenshot() (tea.Model, tea.Cmd) {
-	if anyisland.IsManaged() {
-		m.isCapturing = true
-		rawView := m.View()
-		m.isCapturing = false
-
-		path, err := anyisland.VisualShot("auracrab", rawView)
-		if err != nil {
-			m.lastResponse = "Anyisland capture failed: " + err.Error()
-		} else if path == "" {
-			m.lastResponse = "Anyisland capture returned empty path"
-		} else {
-			m.lastResponse = "Screenshot saved by Anyisland: " + path
-		}
-		return m, nil
-	}
-
 	dir := config.ScreenshotDir()
 
 	timestamp := time.Now().Format("2006-01-02_150405")

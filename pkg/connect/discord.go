@@ -54,7 +54,7 @@ func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, 
 		}
 
 		v := vault.GetVault()
-		
+
 		isAllowed := false
 		if d.history != nil {
 			isAllowed, _ = d.history.IsAuthorized("discord", m.ChannelID)
@@ -134,22 +134,6 @@ func (d *DiscordChannel) Stop() error {
 	if d.session != nil {
 		log.Printf("Auracrab: Closing Discord connection.")
 		return d.session.Close()
-	}
-	return nil
-}
-
-func (d *DiscordChannel) Broadcast(message string) error {
-	if d.session == nil || d.history == nil {
-		return fmt.Errorf("discord session not initialized")
-	}
-
-	channels, err := d.history.ListAuthorizedEntities("discord")
-	if err != nil {
-		return err
-	}
-
-	for _, channelID := range channels {
-		_, _ = d.session.ChannelMessageSend(channelID, message)
 	}
 	return nil
 }

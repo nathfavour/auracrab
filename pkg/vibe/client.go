@@ -83,6 +83,7 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 
 	// Wait for response
 	scanner := bufio.NewScanner(conn)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	if scanner.Scan() {
 		var resp Response
 		if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
@@ -90,6 +91,15 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 		}
 		if resp.ID != reqID {
 			return nil, fmt.Errorf("response ID mismatch: expected %s, got %s", reqID, resp.ID)
+		}
+		if resp.Type == "error" {
+			var errPayload struct {
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(resp.Payload, &errPayload); err == nil && errPayload.Message != "" {
+				return nil, fmt.Errorf("vibeauracle error: %s", errPayload.Message)
+			}
+			return nil, fmt.Errorf("vibeauracle error: %s", string(resp.Payload))
 		}
 		return resp.Payload, nil
 	}
