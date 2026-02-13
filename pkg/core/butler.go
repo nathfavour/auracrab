@@ -49,6 +49,8 @@ type Butler struct {
 	scheduler *cron.Scheduler
 	Memory    *memory.Store
 	History   *memory.HistoryStore
+	Missions  *mission.Manager
+	Ego       *ego.Ego
 }
 
 var (
@@ -63,6 +65,8 @@ func GetButler() *Butler {
 		reg, _ := crabs.NewRegistry()
 		mem, _ := memory.NewStore("global")
 		hist, _ := memory.NewHistoryStore()
+		miss, _ := mission.NewManager()
+		eg, _ := ego.NewEgo()
 
 		instance = &Butler{
 			tasks:     make(map[string]*Task),
@@ -71,6 +75,8 @@ func GetButler() *Butler {
 			scheduler: cron.NewScheduler(),
 			Memory:    mem,
 			History:   hist,
+			Missions:  miss,
+			Ego:       eg,
 		}
 		instance.load()
 		instance.setupCron()
