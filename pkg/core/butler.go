@@ -203,13 +203,15 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 		dirSnapshot = "(no files discovered)"
 	}
 
-	return fmt.Sprintf(
+	prompt := fmt.Sprintf(
 		"AURACRAB_SYSTEM_CONTEXT\nWORKING_DIRECTORY: %s\nPROJECT_FILES_SNAPSHOT:\n%s\n\nCONVERSATION_HISTORY:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
 		cwd,
 		dirSnapshot,
 		historyText,
 		userMessage,
 	)
+	fmt.Printf("Butler: Built prompt (length: %d)\n", len(prompt))
+	return prompt
 }
 
 func (b *Butler) handleChannelMessage(platform, chatID, from, text string) string {
@@ -309,7 +311,7 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 
 	if reply == "" {
 		// Context with hard timeout for the entire processing
-		procCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		
 		intent := "ask" // Default to documented 'ask' intent

@@ -50,6 +50,7 @@ func (c *Client) getConn() (net.Conn, error) {
 		return c.conn, nil
 	}
 
+	fmt.Printf("VibeClient: Dialing %s\n", c.socketPath)
 	var conn net.Conn
 	var err error
 	maxRetries := 2
@@ -58,6 +59,7 @@ func (c *Client) getConn() (net.Conn, error) {
 		if err == nil {
 			break
 		}
+		fmt.Printf("VibeClient: Dial attempt %d failed: %v\n", i+1, err)
 		if i < maxRetries-1 {
 			time.Sleep(200 * time.Millisecond)
 		}
@@ -67,6 +69,7 @@ func (c *Client) getConn() (net.Conn, error) {
 		return nil, fmt.Errorf("failed to connect to vibeauracle UDS: %w", err)
 	}
 
+	fmt.Println("VibeClient: Connected to UDS")
 	c.conn = conn
 	return c.conn, nil
 }
@@ -81,6 +84,7 @@ func (c *Client) closeConn() {
 }
 
 func (c *Client) call(method string, payload interface{}) (json.RawMessage, error) {
+	fmt.Printf("VibeClient: Calling %s\n", method)
 	conn, err := c.getConn()
 	if err != nil {
 		return nil, err
@@ -113,6 +117,7 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	if scanner.Scan() {
+		fmt.Printf("VibeClient: Received response for %s\n", method)
 		var resp Response
 		if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal response: %w. raw: %s", err, string(scanner.Bytes()))
@@ -121,18 +126,13 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 			return nil, fmt.Errorf("response ID mismatch: expected %s, got %s", reqID, resp.ID)
 		}
 		if resp.Type == "error" {
-			var errPayload struct {
-				Message string `json:"message"`
-			}
-			if err := json.Unmarshal(resp.Payload, &errPayload); err == nil && errPayload.Message != "" {
-				return nil, fmt.Errorf("vibeauracle error: %s", errPayload.Message)
-			}
 			return nil, fmt.Errorf("vibeauracle error: %s", string(resp.Payload))
 		}
 		return resp.Payload, nil
 	}
 
 	if err := scanner.Err(); err != nil {
+		fmt.Printf("VibeClient: Scanner error: %v\n", err)
 		c.closeConn()
 		return nil, err
 	}
