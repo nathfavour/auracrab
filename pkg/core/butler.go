@@ -250,11 +250,11 @@ func (b *Butler) processQueue(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-b.highQueue:
-			b.processMessage(msg)
+			go b.processMessage(msg)
 		case msg := <-b.normalQueue:
-			b.processMessage(msg)
+			go b.processMessage(msg)
 		case msg := <-b.lowQueue:
-			b.processMessage(msg)
+			go b.processMessage(msg)
 		case <-time.After(100 * time.Millisecond):
 			// Keep loop alive
 		}
@@ -308,7 +308,9 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 	}
 
 	if reply == "" {
-		_, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		// Context with hard timeout for the entire processing
+		procCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
 		
 		intent := "vibe"
 		lowerText := strings.ToLower(msg.Text)
@@ -326,15 +328,30 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 		stream, err := client.QueryStream(promptWithContext, intent)
 		if err != nil {
 			reply = fmt.Sprintf("Error starting stream: %v", err)
-			cancel()
 		} else {
 			var fullReply strings.Builder
 			
-			for delta := range stream {
-				fullReply.WriteString(delta)
+			// Use a select to handle context cancellation while reading from the stream
+			done := make(chan bool)
+			go func() {
+				for delta := range stream {
+					fullReply.WriteString(delta)
+				}
+				done <- true
+			}()
+
+			select {
+			case <-procCtx.Done():
+				reply = fullReply.String()
+				if reply == "" {
+					reply = "Processing timeout (no response received)."
+				} else {
+					reply += "\n[Stream truncated due to timeout]"
+				}
+			case <-done:
+				reply = fullReply.String()
 			}
-			cancel()
-			reply = fullReply.String()
+
 			if reply == "" {
 				reply = "Empty response from vibeauracle."
 			}
@@ -472,13 +489,26 @@ func (b *Butler) GetStatus() string {
 func (b *Butler) WatchHealth() string {
 	home, _ := os.UserHomeDir()
 	
-	// Check if vibeauracle socket is responsive
+	// Use a non-blocking health check or one with a very short timeout
 	client := vibe.NewClient()
-	err := client.Ping()
-	if err != nil {
-		fmt.Printf("Butler: Vibeauracle socket unresponsive, attempting restart: %v\n", err)
+	
+	// Use a separate goroutine for the ping to avoid hanging the butler if the socket is stuck
+	pingDone := make(chan error, 1)
+	go func() {
+		pingDone <- client.Ping()
+	}()
+
+	select {
+	case err := <-pingDone:
+		if err != nil {
+			fmt.Printf("Butler: Vibeauracle socket unresponsive, attempting restart: %v\n", err)
+			go b.restartVibeaura()
+			return "System Health: Warning (Vibeauracle unresponsive). Self-healing initiated."
+		}
+	case <-time.After(2 * time.Second):
+		fmt.Println("Butler: Health check ping timed out, attempting restart...")
 		go b.restartVibeaura()
-		return "System Health: Warning (Vibeauracle unresponsive). Self-healing initiated."
+		return "System Health: Warning (Vibeauracle ping timeout). Self-healing initiated."
 	}
 
 	logPath := filepath.Join(home, ".vibeauracle", "vibeauracle.log")
