@@ -11,9 +11,10 @@ import (
 // --- Prompt Schema ---
 
 type ProjectTopology struct {
-	Files        []string `json:"files"`
+	Files            []string `json:"files"`
 	ModifiedRecently []string `json:"modified_recently"`
-	Dependencies []string `json:"dependencies"`
+	Dependencies     []string `json:"dependencies"`
+	Deltas           string   `json:"deltas,omitempty"`
 }
 
 type SystemTelemetry struct {
