@@ -78,9 +78,6 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 		return nil, err
 	}
 
-	// Set read deadline
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-
 	// Wait for response
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
