@@ -592,13 +592,19 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Start Remote Watcher
 	go b.remote.Start(ctx)
 
-	// Perform restart recovery to understand where we stopped
-	b.PerformRestartRecovery()
+	// Startup sequence (Asynchronous to prevent hanging)
+	go func() {
+		// Initial health check
+		fmt.Println(b.WatchHealth())
 
-	// Initial responsive pulse
-	b.PerformSensing(ctx)
-	b.ReadTheRoom(ctx)
-	go b.PerformHeartbeat(ctx)
+		// Perform restart recovery to understand where we stopped
+		b.PerformRestartRecovery()
+
+		// Initial responsive pulse
+		b.PerformSensing(ctx)
+		b.ReadTheRoom(ctx)
+		b.PerformHeartbeat(ctx)
+	}()
 
 	// Start scheduler
 	go b.scheduler.Start(ctx)

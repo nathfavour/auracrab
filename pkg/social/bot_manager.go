@@ -388,6 +388,7 @@ func (bm *BotManager) SendMessage(platform string, chatID string, text string) e
 }
 
 func (bm *BotManager) BroadcastLog(text string) {
+	fmt.Printf("Butler [Log]: %s\n", text)
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
 
