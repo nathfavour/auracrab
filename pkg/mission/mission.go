@@ -67,6 +67,59 @@ func NewManager() (*Manager, error) {
 	return m, nil
 }
 
+func (m *Mission) GetExecutableTasks() []SubTask {
+	completed := make(map[string]bool)
+	for _, t := range m.Tasks {
+		if t.Status == StatusCompleted {
+			completed[t.ID] = true
+		}
+	}
+
+	var executable []SubTask
+	for _, t := range m.Tasks {
+		if t.Status != StatusActive {
+			continue
+		}
+
+		ready := true
+		for _, dep := range t.Dependencies {
+			if !completed[dep] {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			executable = append(executable, t)
+		}
+	}
+	return executable
+}
+
+func (m *Mission) AddSubTask(title, desc string, deps []string) string {
+	id := fmt.Sprintf("task-%d", len(m.Tasks)+1)
+	m.Tasks = append(m.Tasks, SubTask{
+		ID:           id,
+		Title:        title,
+		Description:  desc,
+		Status:       StatusActive,
+		Dependencies: deps,
+	})
+	m.UpdatedAt = time.Now()
+	return id
+}
+
+func (m *Mission) UpdateSubTaskStatus(id string, status Status, result string) error {
+	for i, t := range m.Tasks {
+		if t.ID == id {
+			m.Tasks[i].Status = status
+			m.Tasks[i].Result = result
+			m.UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return fmt.Errorf("sub-task %s not found", id)
+}
+
 func (m *Manager) CreateMission(title, desc, goal string, deadline time.Time) *Mission {
 	m.mu.Lock()
 	defer m.mu.Unlock()
