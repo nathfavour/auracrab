@@ -592,11 +592,13 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Start Remote Watcher
 	go b.remote.Start(ctx)
 
-	// Initial health check
-	fmt.Println(b.WatchHealth())
-
 	// Perform restart recovery to understand where we stopped
 	b.PerformRestartRecovery()
+
+	// Initial responsive pulse
+	b.PerformSensing(ctx)
+	b.ReadTheRoom(ctx)
+	go b.PerformHeartbeat(ctx)
 
 	// Start scheduler
 	go b.scheduler.Start(ctx)
@@ -627,7 +629,13 @@ func (b *Butler) Serve(ctx context.Context) error {
 func (b *Butler) PerformSensing(ctx context.Context) {
 	social.GetBotManager().BroadcastLog("🔍 Sensing environment for signals...")
 
-	// 1. Detect TODO.md for sub-tasks
+	// 1. Detect hackathon/project files
+	if _, err := os.Stat("skill.md"); err == nil {
+		b.Ego.RecordThought("Sensed a skill.md file. This might be a Colosseum hackathon or a specialized environment. I should investigate.")
+		social.GetBotManager().BroadcastLog("Found skill.md - Detecting project context.")
+	}
+
+	// 2. Detect TODO.md for sub-tasks
 	if data, err := os.ReadFile("TODO.md"); err == nil {
 		b.Ego.RecordThought("Sensed TODO.md. Looking for mission alignment.")
 		social.GetBotManager().BroadcastLog("Found TODO.md - Analyzing tasks.")
@@ -853,8 +861,8 @@ func (b *Butler) PerformRestartRecovery() {
 		
 		social.GetBotManager().BroadcastLog(fmt.Sprintf("Restart Recovery: Found active mission %s", active.ID))
 	} else {
-		b.Ego.RecordThought("I have reawakened. No active missions found. I am standing by.")
-		social.GetBotManager().BroadcastLog("Restart Recovery: No active mission.")
+		b.Ego.RecordThought("I have reawakened. No active missions found. I'll scan the vicinity for work.")
+		social.GetBotManager().BroadcastLog("Restart Recovery: No active mission. Scanning...")
 	}
 }
 
