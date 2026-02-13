@@ -47,22 +47,19 @@ func (c *Client) getConn() (net.Conn, error) {
 	defer c.mu.Unlock()
 
 	if c.conn != nil {
-		// Quick check if connection is still alive
-		// This is a bit hacky for UDS but works in many cases
-		// Alternatively, we can just dial every time if getConn fails
 		return c.conn, nil
 	}
 
 	var conn net.Conn
 	var err error
-	maxRetries := 3
+	maxRetries := 2
 	for i := 0; i < maxRetries; i++ {
-		conn, err = net.Dial("unix", c.socketPath)
+		conn, err = net.DialTimeout("unix", c.socketPath, 2*time.Second)
 		if err == nil {
 			break
 		}
 		if i < maxRetries-1 {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
 	}
 
@@ -89,6 +86,10 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 		return nil, err
 	}
 
+	// Set a deadline for the call
+	conn.SetDeadline(time.Now().Add(60 * time.Second))
+	defer conn.SetDeadline(time.Time{})
+
 	reqID := fmt.Sprintf("auracrab-%d", time.Now().UnixNano())
 	req := Request{
 		Type:    "request",
@@ -105,15 +106,7 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 	_, err = conn.Write(append(data, '\n'))
 	if err != nil {
 		c.closeConn()
-		// Retry once with new connection
-		conn, err = c.getConn()
-		if err != nil {
-			return nil, err
-		}
-		_, err = conn.Write(append(data, '\n'))
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("failed to write to UDS: %w", err)
 	}
 
 	// Wait for response
@@ -148,13 +141,15 @@ func (c *Client) call(method string, payload interface{}) (json.RawMessage, erro
 }
 
 func (c *Client) callStream(method string, payload interface{}, onResponse func(json.RawMessage) error) error {
-	// For streaming, we might want a dedicated connection to avoid blocking others
-	// but for now, let's use a fresh one to be safe.
-	conn, err := net.Dial("unix", c.socketPath)
+	// Use DialTimeout
+	conn, err := net.DialTimeout("unix", c.socketPath, 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect to vibeauracle UDS: %w", err)
 	}
 	defer conn.Close()
+
+	// Set a generous deadline for streaming
+	conn.SetDeadline(time.Now().Add(5 * time.Minute))
 
 	reqID := fmt.Sprintf("auracrab-%d", time.Now().UnixNano())
 	req := Request{
