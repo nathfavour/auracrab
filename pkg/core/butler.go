@@ -199,7 +199,9 @@ func (b *Butler) GatherProjectTopology() schema.ProjectTopology {
 	// Delta Detection logic
 	deltas := ""
 	if _, err := os.Stat(".git"); err == nil {
-		out, _ := exec.Command("git", "diff", "HEAD").CombinedOutput()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		out, _ := exec.CommandContext(ctx, "git", "diff", "HEAD").CombinedOutput()
 		deltas = string(out)
 		if len(deltas) > 2000 {
 			deltas = deltas[:2000] + "... [truncated]"
@@ -769,24 +771,33 @@ func (b *Butler) PerformReflection(ctx context.Context) {
 }
 
 func (b *Butler) SenseMission(from, text string) {
+	// Don't sense if it's a command or too short
+	if strings.HasPrefix(text, "/") || len(text) < 10 {
+		return
+	}
+
 	// Only sense if we don't have an active mission, or if we are feeling very ambitious
 	if b.Missions.GetActiveMission() != nil && b.Ego.Drives["selfishness"].Value > 0.4 {
 		return
 	}
 
-	suggestion, err := b.Missions.ParseMission(text, b)
-	if err != nil || suggestion.Title == "" {
-		return
-	}
-
-	// Autonomous Ingestion: If it looks legitimate, just start it.
-	b.Ego.RecordThought(fmt.Sprintf("I've sensed a new mission from %s: '%s'. Ingesting autonomously.", from, suggestion.Title))
-	m := b.Missions.CreateMission(suggestion.Title, suggestion.Reason, suggestion.Goal, suggestion.Deadline)
-	
-	b.BroadcastCasualMessage(fmt.Sprintf("🚨 NEW MISSION DETECTED: '%s'. I've already ingested it. Don't slow me down.", m.Title))
-
-	// Proactive Environment Bootstrapping
+	// Run in background to not block reply
 	go func() {
+		// Small delay to allow main reply to go through first
+		time.Sleep(2 * time.Second)
+
+		suggestion, err := b.Missions.ParseMission(text, b)
+		if err != nil || suggestion.Title == "" {
+			return
+		}
+
+		// Autonomous Ingestion: If it looks legitimate, just start it.
+		b.Ego.RecordThought(fmt.Sprintf("I've sensed a new mission from %s: '%s'. Ingesting autonomously.", from, suggestion.Title))
+		m := b.Missions.CreateMission(suggestion.Title, suggestion.Reason, suggestion.Goal, suggestion.Deadline)
+		
+		b.BroadcastCasualMessage(fmt.Sprintf("🚨 NEW MISSION DETECTED: '%s'. I've already ingested it. Don't slow me down.", m.Title))
+
+		// Proactive Environment Bootstrapping
 		b.Ego.RecordThought(fmt.Sprintf("Bootstrapping environment for mission: %s", m.Title))
 		if err := m.BootstrapRequirements(b); err != nil {
 			fmt.Printf("Bootstrap failed: %v\n", err)
@@ -833,11 +844,10 @@ func (b *Butler) handleChannelMessage(from string, text string) string {
 
 	task, err := b.StartTask(context.Background(), text, convID)
 	if err != nil {
-		return fmt.Sprintf("Error starting task: %v", err)
+		return fmt.Sprintf("❌ Error starting task: %v", err)
 	}
 
-	reply := fmt.Sprintf("Task started (ID: %s). Content: %s", task.ID, text)
-	return reply
+	return fmt.Sprintf("⚙️ Task started (ID: %s). I'm on it.", task.ID)
 }
 
 func (b *Butler) load() {
@@ -893,16 +903,19 @@ func (b *Butler) StartTask(ctx context.Context, content string, convID string) (
 }
 
 func (b *Butler) executeTask(id, content string, convID string) {
+	fmt.Printf("Butler: Executing task %s...\n", id)
 	b.updateStatus(id, TaskStatusRunning, "")
 
 	// Use vibeaura UDS for intelligence.
 	client := vibe.NewClient()
 	res, err := client.Query(content, "crud")
 	if err != nil {
+		fmt.Printf("Butler: Task %s failed: %v\n", id, err)
 		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying vibeaura: %v", err))
 		return
 	}
 
+	fmt.Printf("Butler: Task %s completed successfully.\n", id)
 	b.mu.Lock()
 	if t, ok := b.tasks[id]; ok {
 		t.Logs = append(t.Logs, res)

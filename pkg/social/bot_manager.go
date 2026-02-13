@@ -352,41 +352,14 @@ func (bm *BotManager) handleShellMode(ctx context.Context, p MessengerProvider, 
 func (bm *BotManager) handleAgenticMode(ctx context.Context, p MessengerProvider, cfg *BotConfig, text string, history *memory.HistoryStore, querier ContextualQuerier, onTask func(from, text string) string) {
 	p.SendAction(cfg.OwnerID, ActionTyping)
 
-	// Use history
-	convID, _ := history.GetOrCreateConversationForPlatform(cfg.Platform, cfg.OwnerID)
-	
-	prompt := text
-	intent := "crud"
-	if cfg.Mode == ModeChat {
-		prompt = "CONVERSATIONAL MODE: Concise response. Minimal tools.\n\n" + text
-		intent = "ask"
-	} else {
-		prompt = "AGENT MODE: Use tools to solve.\n\n" + text
-	}
+	// Use the task handler which manages the butler state
+	reply := onTask(cfg.OwnerID, text)
+	p.SendMessage(cfg.OwnerID, reply, MessageOptions{ParseMode: ParseModeHTML})
 
-	go func() {
-		// Run through Butler for full context
-		finalReply, err := querier.QueryWithContext(ctx, prompt, intent)
-		if err != nil {
-			p.SendMessage(cfg.OwnerID, fmt.Sprintf("⚠️ *Error*\n```\n%v\n```", err), MessageOptions{ParseMode: ParseModeHTML})
-			return
-		}
-
-		if finalReply == "" {
-			finalReply = "_No response._"
-		}
-
-		p.SendMessage(cfg.OwnerID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
-		
-		bm.mu.Lock()
-		cfg.LastMessageAt = time.Now()
-		bm.mu.Unlock()
-		bm.UpdateBot(*cfg)
-
-		// Record in history
-		_ = history.AddMessage(convID, "user", text)
-		_ = history.AddMessage(convID, "assistant", finalReply)
-	}()
+	bm.mu.Lock()
+	cfg.LastMessageAt = time.Now()
+	bm.mu.Unlock()
+	bm.UpdateBot(*cfg)
 }
 
 func (bm *BotManager) SendMessage(platform string, chatID string, text string) error {
