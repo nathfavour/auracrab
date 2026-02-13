@@ -180,16 +180,31 @@ func (b *Butler) PerformSelfUpdate(ctx context.Context) {
 func (b *Butler) GatherProjectTopology() schema.ProjectTopology {
 	var files []string
 	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil { return nil }
+		if err != nil {
+			return nil
+		}
 		if !info.IsDir() && !strings.HasPrefix(path, ".") {
 			files = append(files, path)
 		}
-		if len(files) > 50 { return filepath.SkipDir } // Limit snapshot
+		if len(files) > 50 {
+			return filepath.SkipDir
+		} // Limit snapshot
 		return nil
 	})
 
+	// Delta Detection logic
+	deltas := ""
+	if _, err := os.Stat(".git"); err == nil {
+		out, _ := exec.Command("git", "diff", "HEAD").CombinedOutput()
+		deltas = string(out)
+		if len(deltas) > 2000 {
+			deltas = deltas[:2000] + "... [truncated]"
+		}
+	}
+
 	return schema.ProjectTopology{
-		Files: files,
+		Files:  files,
+		Deltas: deltas,
 		// ModifiedRecently and Dependencies would be filled with real logic
 	}
 }
