@@ -320,24 +320,7 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 			intent = "chat"
 		}
 
-		// Add system context
-		cwd, _ := os.Getwd()
-		files, _ := filepath.Glob("*")
-		if len(files) > 25 {
-			files = files[:25]
-		}
-		dirSnapshot := strings.Join(files, "\n")
-		if dirSnapshot == "" {
-			dirSnapshot = "(no files discovered)"
-		}
-
-		promptWithContext := fmt.Sprintf(
-			"AURACRAB_SYSTEM_CONTEXT\nWORKING_DIRECTORY: %s\nFILES:\n%s\n\nCONVERSATION_HISTORY:\n%s\n\nCURRENT_USER_MESSAGE: %s",
-			cwd,
-			dirSnapshot,
-			historyText,
-			msg.Text,
-		)
+		promptWithContext := b.buildPrompt(msg.Text, historyText)
 
 		client := vibe.NewClient()
 		stream, err := client.QueryStream(promptWithContext, intent)
