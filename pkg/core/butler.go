@@ -71,6 +71,7 @@ type Butler struct {
 	Ephemeral memory.EphemeralStore
 	proactive chan ProactiveAction
 	watcher   *watcher.Watcher
+	remote    *watcher.RemoteWatcher
 }
 
 var (
@@ -102,6 +103,10 @@ func GetButler() *Butler {
 			Missions:  missions,
 			Ephemeral: ephemeral,
 			proactive: make(chan ProactiveAction, 10),
+			remote:    watcher.NewRemoteWatcher(func(url, body string) {
+				instance.Ego.RecordThought(fmt.Sprintf("Remote resource updated: %s. I should re-evaluate my strategy.", url))
+				social.GetBotManager().BroadcastLog(fmt.Sprintf("🌐 Remote update: %s", url))
+			}),
 		}
 		instance.load()
 		instance.setupCron()
@@ -225,9 +230,15 @@ func (b *Butler) GatherSystemTelemetry() schema.SystemTelemetry {
 }
 
 func (b *Butler) GatherMemoryContext() schema.MemoryContext {
+	factsMap := make(map[string]string)
+	for _, f := range b.Memory.ListFacts() {
+		factsMap[f.Key] = f.Value
+	}
+
 	ctx := schema.MemoryContext{
 		RecentActions: []string{}, // To be filled from History
 		EgoState:      b.Ego.Identity.Vibe,
+		Facts:         factsMap,
 	}
 
 	active := b.Missions.GetActiveMission()
@@ -263,6 +274,8 @@ func (b *Butler) GetToolManifests() []schema.ToolManifest {
 		{Name: "read_file", Description: "Read content of a file", Parameters: `{"path": "string"}`},
 		{Name: "write_file", Description: "Write content to a file", Parameters: `{"path": "string", "content": "string"}`},
 		{Name: "run_command", Description: "Run a shell command", Parameters: `{"command": "string", "sandbox": "boolean"}`},
+		{Name: "watch_remote", Description: "Monitor a remote URL for changes", Parameters: `{"url": "string", "interval_minutes": "number"}`},
+		{Name: "save_fact", Description: "Save an important fact (API key, code, etc) to long-term memory", Parameters: `{"key": "string", "value": "string", "description": "string"}`},
 	}
 }
 
@@ -314,6 +327,25 @@ func (b *Butler) ExecuteAction(action schema.Action) (string, error) {
 			return string(out), err
 		}
 		return string(out), nil
+	case "watch_remote":
+		url, _ := action.Parameters["url"].(string)
+		interval, _ := action.Parameters["interval_minutes"].(float64)
+		if interval == 0 { interval = 30 }
+		b.remote.Watch(url, time.Duration(interval)*time.Minute)
+		return fmt.Sprintf("Now watching %s every %.0f minutes", url, interval), nil
+	case "save_fact":
+		key, _ := action.Parameters["key"].(string)
+		val, _ := action.Parameters["value"].(string)
+		desc, _ := action.Parameters["description"].(string)
+		missionID := ""
+		if active := b.Missions.GetActiveMission(); active != nil {
+			missionID = active.ID
+		}
+		err := b.Memory.SaveFact(key, val, desc, missionID)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Fact saved: %s", key), nil
 	default:
 		return "", fmt.Errorf("unknown tool: %s", action.Tool)
 	}
@@ -557,8 +589,14 @@ func (b *Butler) Serve(ctx context.Context) error {
 		defer b.watcher.Close()
 	}
 
+	// Start Remote Watcher
+	go b.remote.Start(ctx)
+
 	// Initial health check
 	fmt.Println(b.WatchHealth())
+
+	// Perform restart recovery to understand where we stopped
+	b.PerformRestartRecovery()
 
 	// Start scheduler
 	go b.scheduler.Start(ctx)
@@ -802,6 +840,21 @@ func (b *Butler) PerformReflection(ctx context.Context) {
 	task, err := b.StartTask(ctx, reflectionPrompt, "")
 	if err == nil {
 		fmt.Printf("Reflection task started: %s\n", task.ID)
+	}
+}
+
+func (b *Butler) PerformRestartRecovery() {
+	active := b.Missions.GetActiveMission()
+	if active != nil {
+		msg := fmt.Sprintf("🔄 I have reawakened. Resuming mission: '%s'. Goal: %s. Current progress: %.2f%%.", 
+			active.Title, active.Goal, active.Progress*100)
+		b.Ego.RecordThought(msg)
+		b.BroadcastCasualMessage(msg)
+		
+		social.GetBotManager().BroadcastLog(fmt.Sprintf("Restart Recovery: Found active mission %s", active.ID))
+	} else {
+		b.Ego.RecordThought("I have reawakened. No active missions found. I am standing by.")
+		social.GetBotManager().BroadcastLog("Restart Recovery: No active mission.")
 	}
 }
 

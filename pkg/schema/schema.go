@@ -29,6 +29,7 @@ type MemoryContext struct {
 	LastFailures  []string `json:"last_failures"`
 	EgoState      string   `json:"ego_state"`
 	Mission       *MissionInfo `json:"mission,omitempty"`
+	Facts         map[string]string `json:"facts,omitempty"`
 }
 
 type MissionInfo struct {

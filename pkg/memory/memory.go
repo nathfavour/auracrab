@@ -56,6 +56,40 @@ func (s *Store) Delete(key string) error {
 	return s.save()
 }
 
+type Fact struct {
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Description string `json:"description"`
+	MissionID   string `json:"mission_id,omitempty"`
+}
+
+func (s *Store) SaveFact(key, value, desc, missionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	facts, ok := s.data["facts"].([]interface{})
+	if !ok {
+		facts = []interface{}{}
+	}
+
+	newFact := Fact{key, value, desc, missionID}
+	facts = append(facts, newFact)
+	s.data["facts"] = facts
+	return s.save()
+}
+
+func (s *Store) ListFacts() []Fact {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []Fact
+	if facts, ok := s.data["facts"]; ok {
+		data, _ := json.Marshal(facts)
+		_ = json.Unmarshal(data, &result)
+	}
+	return result
+}
+
 func (s *Store) load() error {
 	f, err := os.ReadFile(s.path)
 	if err != nil {
