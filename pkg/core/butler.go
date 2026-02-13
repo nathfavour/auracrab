@@ -312,49 +312,30 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 		procCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 		
-		intent := "vibe"
+		intent := "ask" // Default to documented 'ask' intent
 		lowerText := strings.ToLower(msg.Text)
+		if strings.Contains(lowerText, "plan") || strings.Contains(lowerText, "analyze") || strings.Contains(lowerText, "status") {
+			intent = "plan"
+		}
 		if strings.HasPrefix(lowerText, "create") || strings.HasPrefix(lowerText, "update") || 
 		   strings.HasPrefix(lowerText, "delete") || strings.HasPrefix(lowerText, "list") ||
-		   strings.Contains(lowerText, "task") {
+		   strings.Contains(lowerText, "task") || strings.Contains(lowerText, "run") {
 			intent = "crud"
-		} else if msg.Platform == "telegram" || msg.Platform == "discord" {
-			intent = "chat"
 		}
 
 		promptWithContext := b.buildPrompt(msg.Text, historyText)
 
 		client := vibe.NewClient()
-		stream, err := client.QueryStream(promptWithContext, intent)
+		// Reverting to synchronous Query for better reliability as streaming isn't documented for UDS
+		res, err := client.Query(promptWithContext, intent)
 		if err != nil {
-			reply = fmt.Sprintf("Error starting stream: %v", err)
+			reply = fmt.Sprintf("Error from vibeauracle: %v", err)
 		} else {
-			var fullReply strings.Builder
-			
-			// Use a select to handle context cancellation while reading from the stream
-			done := make(chan bool)
-			go func() {
-				for delta := range stream {
-					fullReply.WriteString(delta)
-				}
-				done <- true
-			}()
+			reply = res
+		}
 
-			select {
-			case <-procCtx.Done():
-				reply = fullReply.String()
-				if reply == "" {
-					reply = "Processing timeout (no response received)."
-				} else {
-					reply += "\n[Stream truncated due to timeout]"
-				}
-			case <-done:
-				reply = fullReply.String()
-			}
-
-			if reply == "" {
-				reply = "Empty response from vibeauracle."
-			}
+		if reply == "" {
+			reply = "Empty response from vibeauracle."
 		}
 	}
 
