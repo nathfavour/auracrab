@@ -1,20 +1,36 @@
-# Auracrab Recovery & Stabilization Roadmap
+# Auracrab: Multi-Tenant Agentic Framework Roadmap
 
-## Immediate Fixes: Connectivity & Resilience
-- [x] **Remove Hardcoded IPC Timeouts**: Strip the 30s `SetReadDeadline` in `pkg/vibe/client.go` to support slow LLM providers.
-- [x] **Implement Heuristic Fallback**: Add a local `HeuristicSynthesizer` (ported from anyisland) to allow basic functionality when `vibeauracle` is offline.
-- [x] **Fix Empty Response Logic**: Adjust `CleanResponse` handling in `vibeauracle` or `auracrab` to ensure reasoning/thoughts are surfaced if the final content block is empty.
+Transitioning from a monolithic agent to a multi-user, multi-agent operating framework.
 
-## Architectural Overhaul: Butler Queue & Prioritization
-- [x] **Asynchronous Message Spooler**: Refactor `Butler.handleChannelMessage` to use a non-blocking queue.
-- [x] **Message Prioritization**: Logic to prioritize "Critical System Alerts" and "Direct Tasks" over "General Chat."
-- [x] **Task Heartbeat**: Decouple the Telegram/Discord reply loop from the AI processing loop so the bot can send "Thinking..." or "Working..." status updates.
+## Phase 1: Identity & Isolation (Architectural Foundation)
+- [ ] **Agent Identity Schema**: Define `Agent` struct in `pkg/identity` (ID, Handle, DisplayName, CreatedAt).
+- [ ] **Global Registry**: Implement a global agent registry in `~/.auracrab/registry.json` to track all local agent accounts.
+- [ ] **Path Namespacing**: Refactor `pkg/config` to support namespaced data directories: `~/.auracrab/agents/{agent_id}/`.
+- [ ] **Context Propagation**: Update core functions to accept `context.Context` carrying the `AgentID`.
+- [ ] **Migration Tool**: Create a script/function to migrate existing monolithic data to the `auracrab` (default) agent namespace.
 
-## Protocol & UX Improvements
-- [x] **IPC Streaming Support**: Upgrade UDS communication to handle streaming chunks (NDJSON) for real-time TUI/Bot feedback.
-- [x] **Context-Aware Intents**: Automatically switch between `IntentChat` (for social) and `IntentCRUD` (for tasks) instead of defaulting to the restrictive `IntentVibe`.
-- [x] **Telegram Authorization Feedback**: Send an explicit "Access Denied" or "Pending Authorization" message instead of silently dropping unauthorized chats.
+## Phase 2: Multi-Butler Orchestration
+- [ ] **Butler Refactoring**: De-singletonize `pkg/core/butler.go`. Enable instantiation with a specific `AgentID`.
+- [ ] **Butler Manager**: Implement a manager to handle the lifecycle (Start/Stop/Status) of multiple agent instances concurrently.
+- [ ] **Resource Isolation**: Ensure each `Butler` instance has its own:
+    - Task Queue & Scheduler
+    - Memory Stores (Vector & History)
+    - Secret Vault
+    - Social Bot Integrations
+- [ ] **Shared Framework**: Ensure all agents leverage the same `pkg/crabs` (specialized agent skills) while maintaining private `Crab` registries.
 
-## Long-term Stability
-- [x] **Daemon Self-Healing**: Implement logic in `Butler.WatchHealth` to automatically restart the `vibeaura` daemon if the socket is unresponsive.
-- [x] **Connection Pooling**: Reuse UDS connections where possible instead of dialing a new socket for every query.
+## Phase 3: CLI & UX for Multi-Tenancy
+- [ ] **Agent Management Commands**:
+    - `auracrab agents create <handle>`: Provision a new clean-slate agent.
+    - `auracrab agents list`: View all managed agents.
+    - `auracrab agents delete <handle>`: Wipe an agent's data.
+- [ ] **Context Switching**:
+    - Implement a global `--agent <handle>` flag for all CLI commands.
+    - `auracrab agents switch <handle>`: Set the default agent for the current session.
+- [ ] **Multi-Agent TUI**: Update the TUI to allow switching between agent dashboards or viewing a consolidated view.
+
+## Phase 4: Robustness & Scaling
+- [ ] **Database Integration**: (Optional/Future) Transition from flat JSON files to an embedded DB (e.g., SQLite) for better multi-user performance.
+- [ ] **Permission System**: Basic read/write permissions for shared resources between agents.
+- [ ] **Framework SDK**: Refine `pkg/core` so third-party developers can easily "plug in" new agent logic while leveraging the Auracrab framework.
+- [ ] **Millions-Scale POC**: Test the framework's ability to handle high volumes of idle/active agent identities.
