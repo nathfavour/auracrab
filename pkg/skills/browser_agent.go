@@ -105,9 +105,7 @@ func (s *BrowserAgentSkill) Execute(ctx context.Context, args json.RawMessage) (
 		history = append(history, fmt.Sprintf("Step %d: %s (Action: %s)", i+1, step.Reasoning, step.Action))
 
 		if step.Finished {
-			return fmt.Sprintf("Goal achieved: %s
-
-Final Result: %s", params.Goal, step.Text), nil
+			return fmt.Sprintf("Goal achieved: %s\n\nFinal Result: %s", params.Goal, step.Text), nil
 		}
 
 		// 3. Execute step
@@ -126,52 +124,21 @@ Final Result: %s", params.Goal, step.Text), nil
 
 func (s *BrowserAgentSkill) observe(ctx context.Context, bc *connect.BrowserChannel, target string) (string, error) {
 	// Get current URL and interactive elements
-	// We use scrape:interactive which returns JSON
 	rawElements, err := bc.Request(ctx, target, "scrape:interactive")
 	if err != nil {
-		// Fallback to simple scrape if interactive fails
 		return bc.Request(ctx, target, "scrape")
 	}
 	return rawElements, nil
 }
 
 func (s *BrowserAgentSkill) planNextStep(ctx context.Context, client *vibe.Client, goal, observation string, history []string) (*BrowserStepAction, error) {
-	prompt := fmt.Sprintf(`You are an autonomous browser agent. 
-GOAL: %s
-
-HISTORY:
-%s
-
-CURRENT PAGE OBSERVATION (Interactive Elements):
-%s
-
-Your task is to decide the next single action to take to reach the goal.
-Available actions:
-- open (url: string)
-- click (selector: string)
-- type (selector: string, text: string)
-- hover (selector: string)
-- wait (condition: string - e.g. "selector:.class" or "2000")
-- finished (text: string - use this when the goal is achieved, provide final answer in 'text')
-
-Return ONLY a JSON object:
-{
-  "action": "open|click|type|hover|wait|finished",
-  "url": "...",
-  "selector": "...",
-  "text": "...",
-  "condition": "...",
-  "reasoning": "why you are taking this step",
-  "finished": true|false
-}`, goal, strings.Join(history, "
-"), observation)
+	prompt := fmt.Sprintf("You are an autonomous browser agent.\nGOAL: %s\n\nHISTORY:\n%s\n\nCURRENT PAGE OBSERVATION (Interactive Elements):\n%s\n\nYour task is to decide the next single action to take to reach the goal.\nAvailable actions:\n- open (url: string)\n- click (selector: string)\n- type (selector: string, text: string)\n- hover (selector: string)\n- wait (condition: string - e.g. \"selector:.class\" or \"2000\")\n- finished (text: string - use this when the goal is achieved, provide final answer in 'text')\n\nReturn ONLY a JSON object:\n{\n  \"action\": \"open|click|type|hover|wait|finished\",\n  \"url\": \"...\",\n  \"selector\": \"...\",\n  \"text\": \"...\",\n  \"condition\": \"...\",\n  \"reasoning\": \"why you are taking this step\",\n  \"finished\": true|false\n}", goal, strings.Join(history, "\n"), observation)
 
 	res, err := client.Query(prompt, "plan")
 	if err != nil {
 		return nil, err
 	}
 
-	// Clean JSON if LLM wraps it
 	res = strings.TrimSpace(res)
 	if strings.HasPrefix(res, "```json") {
 		res = strings.TrimPrefix(res, "```json")
@@ -200,6 +167,8 @@ func (s *BrowserAgentSkill) executeStep(ctx context.Context, bc *connect.Browser
 		command = "hover " + step.Selector
 	case "wait":
 		command = "wait " + step.Condition
+	case "finished":
+		return "Goal achieved: " + step.Text, nil
 	default:
 		return "", fmt.Errorf("unknown action: %s", step.Action)
 	}

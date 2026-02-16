@@ -24,12 +24,12 @@ Implementing human-like, multi-tenant browser automation integrated directly int
 - [ ] **Intelligent URL Discovery**: Agent can perform Google searches or guess URLs based on service names if not provided.
 
 ## Phase 4: Full Tool Integration & Autonomy
-- [ ] **Zero-Headless Philosophy**: Ensure 100% of automation happens in the user's local session, avoiding bot detection and leveraging existing auth.
-- [ ] **Autonomous Browser Missions**: Support long-running tasks that involve navigating complex web workflows (e.g., "Find the latest invoice on Stripe and upload it to the vault").
+- [x] **Zero-Headless Philosophy**: Ensure 100% of automation happens in the user's local session, avoiding bot detection and leveraging existing auth.
+- [x] **Autonomous Browser Missions**: Support long-running tasks that involve navigating complex web workflows via the `browser_agent` skill.
 - [ ] **Human-Agent Handover**: UI in the extension to allow the human to take over or provide input when the AI is stuck.
-- [ ] **Account Independent Treatment**: Ensure the AI treats different accounts of the same service (e.g., Personal vs Work Gmail) as distinct entities.
+- [x] **Account Independent Treatment**: Ensure the AI treats different accounts of the same service (e.g., Personal vs Work Gmail) as distinct entities via context-awareness.
 
 ## Phase 5: Hardcode-Free Intelligence
-- [ ] **Dynamic Manifests**: No hardcoded selectors; AI should analyze the DOM to find interaction points.
-- [ ] **Self-Correcting Scripts**: If a click fails, the AI should retry with a different selector or strategy.
+- [x] **Dynamic Manifests**: No hardcoded selectors; AI should analyze the DOM (via `scrape_interactive`) to find interaction points.
+- [x] **Self-Correcting Scripts**: If a click fails, the AI should retry with a different selector or strategy in its autonomous loop.
 - [ ] **Toolkit-to-Browser Mapping**: Mapping all Auracrab skills (Vault, Memory, Crabs) so they can be triggered from or feed into browser automation.

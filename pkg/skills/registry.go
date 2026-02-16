@@ -31,6 +31,7 @@ func GetRegistry() *Registry {
 		}
 		// Auto-register built-in skills
 		defaultRegistry.Register(&BrowserSkill{})
+		defaultRegistry.Register(&BrowserAgentSkill{})
 		defaultRegistry.Register(NewSocialSkill())
 		defaultRegistry.Register(&AutoCommitSkill{})
 		defaultRegistry.Register(&SystemSkill{})

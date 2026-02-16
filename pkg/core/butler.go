@@ -214,12 +214,11 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 			"PROJECT_FILES_SNAPSHOT:\n%s\n\n"+
 			"BROWSER_TOOL_STATUS: %s\n"+
 			"BROWSER_CAPABILITIES:\n"+
-			"- action: 'open', url: '...' (Open a website in the user's active browser session)\n"+
-			"- action: 'scrape', url: '...' (Extract text from the current page)\n"+
-			"- action: 'click', selector: '...' (Human-like click on an element)\n"+
-			"- action: 'type', selector: '...', text: '...' (Simulated human typing)\n\n"+
+			"- action: 'browser', ... (Atomic actions: open, scrape, click, type, hover, wait, screenshot)\n"+
+			"- action: 'browser_agent', goal: '...' (Autonomous agent for complex multi-step browser tasks)\n\n"+
 			"BROWSER_RULES:\n"+
-			"- Use the 'browser' skill for all web-related tasks.\n"+
+			"- Use the 'browser' skill for simple, single-action web tasks.\n"+
+			"- Use the 'browser_agent' skill for complex goals that require multiple steps (e.g., 'Find the best flight to NYC', 'Post a thread on Twitter about AI').\n"+
 			"- If a website is unknown, use 'open' with a Google search URL or guess the most likely URL.\n"+
 			"- Prefer human-like interaction (click, type) over simple scraping when navigating complex apps.\n"+
 			"- Act as if you are using the user's local browser session (you are!).\n\n"+
