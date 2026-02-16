@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+
+	"github.com/nathfavour/auracrab/pkg/connect"
 )
 
 type BrowserSkill struct{}
@@ -52,18 +54,26 @@ func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (strin
 		if params.URL == "" {
 			return "", fmt.Errorf("missing url")
 		}
-		return s.open(params.URL)
+		return s.open(ctx, params.URL)
 	case "scrape":
 		if params.URL == "" {
 			return "", fmt.Errorf("missing url")
 		}
-		return s.scrape(params.URL)
+		return s.scrape(ctx, params.URL)
 	default:
 		return "", fmt.Errorf("unknown action: %s", params.Action)
 	}
 }
 
-func (s *BrowserSkill) open(url string) (string, error) {
+func (s *BrowserSkill) open(ctx context.Context, url string) (string, error) {
+	bc := connect.GetBrowserChannel()
+	if bc != nil && bc.IsActive() {
+		_, err := bc.Request(ctx, "open "+url)
+		if err == nil {
+			return fmt.Sprintf("Opened %s in browser extension", url), nil
+		}
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "linux":
@@ -81,7 +91,18 @@ func (s *BrowserSkill) open(url string) (string, error) {
 	return fmt.Sprintf("Opened %s", url), nil
 }
 
-func (s *BrowserSkill) scrape(url string) (string, error) {
+func (s *BrowserSkill) scrape(ctx context.Context, url string) (string, error) {
+	bc := connect.GetBrowserChannel()
+	if bc != nil && bc.IsActive() {
+		// If we have a connected browser, we can use it to scrape (even JS-heavy sites)
+		// First open the URL if it's not already open or just scrape active tab
+		// For now, let's assume we want to scrape the provided URL
+		_, _ = bc.Request(ctx, "open "+url)
+		// Wait a bit for load? Extensions usually handle this better
+		// For now just try to scrape
+		return bc.Request(ctx, "scrape")
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err

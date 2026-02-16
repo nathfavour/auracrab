@@ -5,3 +5,8 @@ vendor/
 bin/
 auracrab
 .auracrab_tests/
+
+# Browser Extension
+webuse/node_modules/
+webuse/.output/
+webuse/.wxt/
