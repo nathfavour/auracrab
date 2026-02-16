@@ -203,10 +203,35 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 		dirSnapshot = "(no files discovered)"
 	}
 
+	browserStatus := "DISCONNECTED"
+	if bc := connect.GetBrowserChannel(); bc != nil && bc.IsActive() {
+		browserStatus = "CONNECTED (ready for automation)"
+	}
+
 	prompt := fmt.Sprintf(
-		"AURACRAB_SYSTEM_CONTEXT\nWORKING_DIRECTORY: %s\nPROJECT_FILES_SNAPSHOT:\n%s\n\nCONVERSATION_HISTORY:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
+		"AURACRAB_SYSTEM_CONTEXT\n"+
+			"WORKING_DIRECTORY: %s\n"+
+			"PROJECT_FILES_SNAPSHOT:\n%s\n\n"+
+			"BROWSER_TOOL_STATUS: %s\n"+
+			"BROWSER_CAPABILITIES:\n"+
+			"- action: 'open', url: '...' (Open a website in the user's active browser session)\n"+
+			"- action: 'scrape', url: '...' (Extract text from the current page)\n"+
+			"- action: 'click', selector: '...' (Human-like click on an element)\n"+
+			"- action: 'type', selector: '...', text: '...' (Simulated human typing)\n\n"+
+			"BROWSER_RULES:\n"+
+			"- Use the 'browser' skill for all web-related tasks.\n"+
+			"- If a website is unknown, use 'open' with a Google search URL or guess the most likely URL.\n"+
+			"- Prefer human-like interaction (click, type) over simple scraping when navigating complex apps.\n"+
+			"- Act as if you are using the user's local browser session (you are!).\n\n"+
+			"CONVERSATION_HISTORY:\n%s\n\n"+
+			"USER_PROMPT:\n%s\n\n"+
+			"OUTPUT_RULES:\n"+
+			"- Return the final actionable answer only.\n"+
+			"- Do not include chain-of-thought or hidden reasoning.\n"+
+			"- Be concrete, execution-oriented, and directly useful.",
 		cwd,
 		dirSnapshot,
+		browserStatus,
 		historyText,
 		userMessage,
 	)
