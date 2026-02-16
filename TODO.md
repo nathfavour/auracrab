@@ -8,19 +8,19 @@ Implementing human-like, multi-tenant browser automation integrated directly int
 - [x] **Basic Command Loop**: Support for `open` and `scrape` commands via WebSocket.
 - [x] **Browser Skill Integration**: Refactored `pkg/skills/browser_skill.go` to leverage the extension when available.
 
-## Phase 2: Multi-Session & Profile Intelligence
-- [ ] **Profile Identification**: Enhance extension to report specific browser profiles, window IDs, and account contexts.
-- [ ] **Intelligent Client Registry**: Update `BrowserChannel` to track and address specific browser windows or profiles.
-- [ ] **Account-Aware Automation**: Ability for the agent to say "Use the browser profile where I'm logged into Twitter."
-- [ ] **Context Switching**: Allow the agent to multiplex commands across different browser instances.
+## Phase 2: Multi-Session & Profile Intelligence (Completed)
+- [x] **Profile Identification**: Enhance extension to report specific browser profiles, window IDs, and account contexts.
+- [x] **Intelligent Client Registry**: Update `BrowserChannel` to track and address specific browser windows or profiles.
+- [x] **Account-Aware Automation**: Ability for the agent to say "Use the browser profile where I'm logged into Twitter."
+- [x] **Context Switching**: Allow the agent to multiplex commands across different browser instances.
 
 ## Phase 3: Human-Like Automation Toolkit
-- [ ] **Advanced Interaction Skill**: Implement JSON-based high-level actions:
+- [x] **Advanced Interaction Skill**: Implement JSON-based high-level actions:
     - `click(selector)`: Smooth scroll + natural click.
     - `type(selector, text)`: Simulated keystrokes with varied delays.
     - `hover(selector)`: Move "virtual" cursor.
     - `wait(condition)`: Intelligent waiting for DOM elements or network idle.
-- [ ] **Visual Context**: Enable extension to capture screenshots or DOM snapshots for the AI to "see" the page layout.
+- [x] **Visual Context**: Enable extension to capture screenshots or DOM snapshots for the AI to "see" the page layout.
 - [ ] **Intelligent URL Discovery**: Agent can perform Google searches or guess URLs based on service names if not provided.
 
 ## Phase 4: Full Tool Integration & Autonomy

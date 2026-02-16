@@ -12,6 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var globalBrowserChannel *BrowserChannel
+
 type BrowserTab struct {
 	ID    int    `json:"id"`
 	URL   string `json:"url"`

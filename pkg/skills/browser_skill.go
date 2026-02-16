@@ -29,7 +29,7 @@ func (s *BrowserSkill) Manifest() []byte {
 			"properties": {
 				"action": {
 					"type": "string",
-					"enum": ["open", "scrape", "click", "type"]
+					"enum": ["open", "scrape", "click", "type", "hover", "wait", "screenshot"]
 				},
 				"url": {
 					"type": "string"
@@ -39,6 +39,10 @@ func (s *BrowserSkill) Manifest() []byte {
 				},
 				"text": {
 					"type": "string"
+				},
+				"condition": {
+					"type": "string",
+					"description": "For 'wait' action: can be a timeout in ms or 'selector:.css-selector'"
 				},
 				"context": {
 					"type": "string",
@@ -52,11 +56,12 @@ func (s *BrowserSkill) Manifest() []byte {
 
 func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var params struct {
-		Action   string `json:"action"`
-		URL      string `json:"url"`
-		Selector string `json:"selector"`
-		Text     string `json:"text"`
-		Context  string `json:"context"`
+		Action    string `json:"action"`
+		URL       string `json:"url"`
+		Selector  string `json:"selector"`
+		Text      string `json:"text"`
+		Condition string `json:"condition"`
+		Context   string `json:"context"`
 	}
 	if err := json.Unmarshal(args, &params); err != nil {
 		return "", err
@@ -80,9 +85,67 @@ func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (strin
 			return "", fmt.Errorf("missing selector or text")
 		}
 		return s.typeText(ctx, params.Selector, params.Text, params.Context)
+	case "hover":
+		if params.Selector == "" {
+			return "", fmt.Errorf("missing selector")
+		}
+		return s.hover(ctx, params.Selector, params.Context)
+	case "wait":
+		cond := params.Condition
+		if cond == "" {
+			cond = params.Text // Fallback to text
+		}
+		return s.wait(ctx, cond, params.Context)
+	case "screenshot":
+		return s.screenshot(ctx, params.Context)
 	default:
 		return "", fmt.Errorf("unknown action: %s", params.Action)
 	}
+}
+
+func (s *BrowserSkill) screenshot(ctx context.Context, contextStr string) (string, error) {
+	bc := connect.GetBrowserChannel()
+	if bc == nil || !bc.IsActive() {
+		return "", fmt.Errorf("no browser extension connected")
+	}
+	targetInstance := ""
+	if contextStr != "" {
+		client := bc.FindClientByTab(contextStr)
+		if client != nil {
+			targetInstance = client.InstanceID
+		}
+	}
+	return bc.Request(ctx, targetInstance, "screenshot")
+}
+
+func (s *BrowserSkill) hover(ctx context.Context, selector string, contextStr string) (string, error) {
+	bc := connect.GetBrowserChannel()
+	if bc == nil || !bc.IsActive() {
+		return "", fmt.Errorf("no browser extension connected")
+	}
+	targetInstance := ""
+	if contextStr != "" {
+		client := bc.FindClientByTab(contextStr)
+		if client != nil {
+			targetInstance = client.InstanceID
+		}
+	}
+	return bc.Request(ctx, targetInstance, "hover "+selector)
+}
+
+func (s *BrowserSkill) wait(ctx context.Context, condition string, contextStr string) (string, error) {
+	bc := connect.GetBrowserChannel()
+	if bc == nil || !bc.IsActive() {
+		return "", fmt.Errorf("no browser extension connected")
+	}
+	targetInstance := ""
+	if contextStr != "" {
+		client := bc.FindClientByTab(contextStr)
+		if client != nil {
+			targetInstance = client.InstanceID
+		}
+	}
+	return bc.Request(ctx, targetInstance, "wait "+condition)
 }
 
 func (s *BrowserSkill) open(ctx context.Context, url string, contextStr string) (string, error) {

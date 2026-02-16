@@ -73,10 +73,18 @@ export default defineBackground(() => {
         sendResponse(id, results[0]?.result || "");
       } else if (command.startsWith('click ')) {
         const selector = command.substring(6);
-        await executeInActiveTab((sel) => {
+        await executeInActiveTab(async (sel) => {
           const el = document.querySelector(sel) as HTMLElement;
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Wait for scroll to finish
+            await new Promise(r => setTimeout(r, 500));
+            
+            // Highlight element briefly
+            const oldOutline = el.style.outline;
+            el.style.outline = '2px solid red';
+            setTimeout(() => el.style.outline = oldOutline, 500);
+
             el.click();
             return "Clicked " + sel;
           }
@@ -87,19 +95,64 @@ export default defineBackground(() => {
         const parts = command.substring(5).split(' ');
         const selector = parts[0];
         const text = parts.slice(1).join(' ');
-        await executeInActiveTab((sel, txt) => {
+        await executeInActiveTab(async (sel, txt) => {
           const el = document.querySelector(sel) as HTMLInputElement;
           if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await new Promise(r => setTimeout(r, 500));
             el.focus();
-            el.value = txt;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // Simulated typing
+            el.value = '';
+            for (const char of txt) {
+              el.value += char;
+              el.dispatchEvent(new KeyboardEvent('keydown', { key: char }));
+              el.dispatchEvent(new KeyboardEvent('keypress', { key: char }));
+              el.dispatchEvent(new KeyboardEvent('keyup', { key: char }));
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+            }
             el.dispatchEvent(new Event('change', { bubbles: true }));
             return "Typed into " + sel;
           }
           return "Element not found: " + sel;
         }, [selector, text]);
         sendResponse(id, "Type command sent for " + selector);
+      } else if (command.startsWith('hover ')) {
+        const selector = command.substring(6);
+        await executeInActiveTab(async (sel) => {
+          const el = document.querySelector(sel) as HTMLElement;
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await new Promise(r => setTimeout(r, 500));
+            el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            return "Hovered over " + sel;
+          }
+          return "Element not found: " + sel;
+        }, [selector]);
+        sendResponse(id, "Hover command sent for " + selector);
+      } else if (command.startsWith('wait ')) {
+        const condition = command.substring(5);
+        // Basic implementation: wait for selector or timeout
+        if (condition.startsWith('selector:')) {
+          const sel = condition.substring(9);
+          const result = await executeInActiveTab(async (s) => {
+            for (let i = 0; i < 20; i++) {
+              if (document.querySelector(s)) return true;
+              await new Promise(r => setTimeout(r, 500));
+            }
+            return false;
+          }, [sel]);
+          sendResponse(id, result[0].result ? "Found " + sel : "Timeout waiting for " + sel);
+        } else {
+          const ms = parseInt(condition) || 2000;
+          await new Promise(r => setTimeout(r, ms));
+          sendResponse(id, "Waited " + ms + "ms");
+        }
+      } else if (command === 'screenshot') {
+        const dataUrl = await browser.tabs.captureVisibleTab();
+        sendResponse(id, dataUrl); // This might be large, but for now let's send it
       }
     } catch (err) {
       sendResponse(id, "Error: " + String(err));
