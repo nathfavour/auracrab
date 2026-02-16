@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/nathfavour/auracrab/pkg/vault"
 	"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/vault"
 )
 
 // TelegramChannel is a real Telegram integration using long-polling.
@@ -83,7 +83,7 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(platform str
 				chatID := update.Message.Chat.ID
 				chatIDStr := fmt.Sprintf("%d", chatID)
 				v := vault.GetVault()
-				
+
 				// Check Database authorization first
 				isAllowed := false
 				if t.history != nil {
@@ -107,10 +107,10 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(platform str
 					} else {
 						// If nothing configured at all, we might want to be strict
 						// but for now, let's keep the user's "allowed to message" requirement.
-						// We'll default to false if any TELEGRAM_ALLOWED_CHATS is set, 
+						// We'll default to false if any TELEGRAM_ALLOWED_CHATS is set,
 						// or true if it's completely fresh (to avoid locking users out immediately).
 						// But with the "no DM first" reminder, let's be more careful.
-						isAllowed = false 
+						isAllowed = false
 					}
 				}
 
@@ -197,7 +197,7 @@ func (t *TelegramChannel) Send(to string, text string) error {
 	var chatID int64
 	_, err := fmt.Sscanf(to, "%d", &chatID)
 	if err != nil {
-		// If 'to' is not an ID, maybe it's a username? 
+		// If 'to' is not an ID, maybe it's a username?
 		// tgbotapi doesn't easily support sending by username without a ChatID.
 		return fmt.Errorf("invalid chat ID: %s", to)
 	}

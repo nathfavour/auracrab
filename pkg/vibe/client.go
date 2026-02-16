@@ -182,7 +182,7 @@ func (c *Client) callStream(method string, payload interface{}, onResponse func(
 		if resp.Type == "error" {
 			return fmt.Errorf("vibeauracle error: %s", string(resp.Payload))
 		}
-		
+
 		if err := onResponse(resp.Payload); err != nil {
 			return err
 		}
@@ -237,7 +237,7 @@ func (c *Client) QueryStream(content string, intent string) (<-chan string, erro
 		Content: content,
 		Intent:  intent,
 	}
-	
+
 	out := make(chan string)
 	go func() {
 		defer close(out)

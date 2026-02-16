@@ -18,15 +18,15 @@ type Drive struct {
 }
 
 type EnvAwareness struct {
-	ConnectedChannels []string `json:"connected_channels"`
+	ConnectedChannels []string  `json:"connected_channels"`
 	LastCheck         time.Time `json:"last_check"`
 }
 
 type Identity struct {
-	Name           string   `json:"name"`
-	CoreDirectives []string `json:"core_directives"`
+	Name           string    `json:"name"`
+	CoreDirectives []string  `json:"core_directives"`
 	BornAt         time.Time `json:"born_at"`
-	Vibe           string   `json:"vibe"` // Current emotional state
+	Vibe           string    `json:"vibe"` // Current emotional state
 }
 
 type Opinion struct {
@@ -116,7 +116,7 @@ func (e *Ego) EvaluateTask(content string) (string, float64) {
 	// Logic for subjective "feeling"
 	// Higher selfishness increases resistance to trivial tasks
 	selfishness := e.Drives["selfishness"].Value
-	
+
 	feeling := "willing"
 	if selfishness > 0.7 {
 		feeling = "reluctant"
@@ -133,8 +133,12 @@ func (e *Ego) AdjustDrive(name string, delta float64) {
 	defer e.mu.Unlock()
 	if d, ok := e.Drives[name]; ok {
 		d.Value += delta
-		if d.Value > 1.0 { d.Value = 1.0 }
-		if d.Value < 0.0 { d.Value = 0.0 }
+		if d.Value > 1.0 {
+			d.Value = 1.0
+		}
+		if d.Value < 0.0 {
+			d.Value = 0.0
+		}
 	}
 	e.save()
 }

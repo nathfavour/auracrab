@@ -3,6 +3,7 @@ package social
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -39,20 +40,44 @@ func (p *TelegramProvider) GetUpdates(ctx context.Context) (<-chan Update, error
 				if !ok {
 					return
 				}
-				if tgUpdate.Message == nil {
+
+				var update Update
+				if tgUpdate.Message != nil {
+					from := fmt.Sprintf("@%s", tgUpdate.Message.From.UserName)
+					if tgUpdate.Message.From.UserName == "" {
+						from = fmt.Sprintf("%d", tgUpdate.Message.From.ID)
+					}
+					update = Update{
+						ChatID:  fmt.Sprintf("%d", tgUpdate.Message.Chat.ID),
+						Text:    tgUpdate.Message.Text,
+						RawFrom: from,
+					}
+				} else if tgUpdate.CallbackQuery != nil {
+					// Handle callback as a text command for simplicity in BotManager
+					from := fmt.Sprintf("@%s", tgUpdate.CallbackQuery.From.UserName)
+					if tgUpdate.CallbackQuery.From.UserName == "" {
+						from = fmt.Sprintf("%d", tgUpdate.CallbackQuery.From.ID)
+					}
+
+					// Prepend / for callback data to treat them as commands
+					text := tgUpdate.CallbackQuery.Data
+					if !strings.HasPrefix(text, "/") {
+						text = "/" + text
+					}
+
+					update = Update{
+						ChatID:  fmt.Sprintf("%d", tgUpdate.CallbackQuery.Message.Chat.ID),
+						Text:    text,
+						RawFrom: from,
+					}
+
+					// Answer callback query to stop loading spinner
+					_, _ = p.bot.Request(tgbotapi.NewCallback(tgUpdate.CallbackQuery.ID, ""))
+				} else {
 					continue
 				}
 
-				from := fmt.Sprintf("@%s", tgUpdate.Message.From.UserName)
-				if tgUpdate.Message.From.UserName == "" {
-					from = fmt.Sprintf("%d", tgUpdate.Message.From.ID)
-				}
-
-				updates <- Update{
-					ChatID:  fmt.Sprintf("%d", tgUpdate.Message.Chat.ID),
-					Text:    tgUpdate.Message.Text,
-					RawFrom: from,
-				}
+				updates <- update
 			}
 		}
 	}()
@@ -107,7 +132,30 @@ var TelegramModeKeyboard = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButton("Mode: Shell"),
 	),
 	tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("/pay"),
+		tgbotapi.NewKeyboardButton("/wallet"),
 		tgbotapi.NewKeyboardButton("/status"),
-		tgbotapi.NewKeyboardButton("/help"),
 	),
 )
+
+func NewModeInlineKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💬 Chat", "mode_chat"),
+			tgbotapi.NewInlineKeyboardButtonData("🤖 Agent", "mode_agent"),
+			tgbotapi.NewInlineKeyboardButtonData("🐚 Shell", "mode_shell"),
+		),
+	)
+}
+
+func NewPaymentKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Quick Pay 1 USDC", "pay_1_usdc"),
+			tgbotapi.NewInlineKeyboardButtonData("🏦 Wallet Info", "wallet_info"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔄 Settle Pending", "settle_all"),
+		),
+	)
+}

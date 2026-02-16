@@ -47,7 +47,9 @@ func (f *FacebookDriver) Post(ctx context.Context, content string) (string, erro
 	log.Printf("Posting to Facebook: %s", content)
 	return "https://facebook.com/mock_post", nil
 }
-func (f *FacebookDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+func (f *FacebookDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) {
+	return []Post{}, nil
+}
 
 type InstagramDriver struct{}
 
@@ -56,7 +58,9 @@ func (i *InstagramDriver) Post(ctx context.Context, content string) (string, err
 	log.Printf("Posting to Instagram: %s", content)
 	return "https://instagram.com/mock_post", nil
 }
-func (i *InstagramDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) { return []Post{}, nil }
+func (i *InstagramDriver) GetFeed(ctx context.Context, limit int) ([]Post, error) {
+	return []Post{}, nil
+}
 
 type ThreadsDriver struct{}
 

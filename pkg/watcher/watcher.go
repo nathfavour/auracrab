@@ -60,7 +60,7 @@ func (w *Watcher) Start(ctx context.Context, dir string) error {
 				if !ok {
 					return
 				}
-				
+
 				// Ignore non-write/create/remove/rename events
 				if event.Op&fsnotify.Chmod == fsnotify.Chmod {
 					continue

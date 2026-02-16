@@ -21,8 +21,9 @@ type MessageOptions struct {
 }
 
 const (
-	ParseModeHTML = "HTML"
-	ActionTyping  = "typing"
+	ParseModeHTML     = "HTML"
+	ParseModeMarkdown = "Markdown"
+	ActionTyping      = "typing"
 )
 
 type MessengerProvider interface {

@@ -76,7 +76,7 @@ func encrypt(data []byte) ([]byte, error) {
 	}
 
 	ciphertext := gcm.Seal(nil, nonce, data, nil)
-	
+
 	payload := EncryptedPayload{
 		Version:    1,
 		Nonce:      hex.EncodeToString(nonce),

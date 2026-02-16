@@ -60,4 +60,3 @@ func (r *Registry) List() []Skill {
 	}
 	return list
 }
-

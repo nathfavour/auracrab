@@ -273,7 +273,7 @@ func (h *HistoryStore) DeleteConversation(convID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	_, err = tx.Exec("DELETE FROM messages WHERE conversation_id = ?", convID)
 	if err != nil {
 		tx.Rollback()

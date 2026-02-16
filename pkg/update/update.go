@@ -48,8 +48,8 @@ func checkPulse() (bool, string, error) {
 	}
 
 	// Check for updates
-	// Note: According to docs, Pulse can send push notifications. 
-	// For a simple check, we might need a specific 'op' if anyisland supports it, 
+	// Note: According to docs, Pulse can send push notifications.
+	// For a simple check, we might need a specific 'op' if anyisland supports it,
 	// otherwise we fallback to CLI check.
 	// Assuming anyisland CLI is the source of truth for now.
 	return checkCLI()

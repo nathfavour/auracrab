@@ -16,9 +16,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "auracrab",
-	Short: "auracrab is a modular CLI tool",
-	Long:  `A highly modular CLI project structure built with Go and Cobra.`,
+	Use:     "auracrab",
+	Short:   "auracrab is a modular CLI tool",
+	Long:    `A highly modular CLI project structure built with Go and Cobra.`,
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", config.Version, config.Commit, config.BuildDate),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// managed_updates are handled by Butler in autonomous mode via Anyisland Pulse
@@ -26,11 +26,11 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Zero-command entry point: Start the autonomous heartbeat
 		fmt.Println("🦀 Auracrab is coming alive...")
-		
+
 		// Run the butler in continuous mode
 		ctx := context.Background()
 		butler := core.GetButler()
-		
+
 		if err := butler.Serve(ctx); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)

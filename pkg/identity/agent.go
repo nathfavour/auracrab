@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nathfavour/auracrab/pkg/config"
 )
 
 // Agent represents a unique agentic identity within the framework.

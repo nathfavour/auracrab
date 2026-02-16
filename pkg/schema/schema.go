@@ -25,19 +25,19 @@ type SystemTelemetry struct {
 }
 
 type MemoryContext struct {
-	RecentActions []string `json:"recent_actions"`
-	LastFailures  []string `json:"last_failures"`
-	EgoState      string   `json:"ego_state"`
-	Mission       *MissionInfo `json:"mission,omitempty"`
+	RecentActions []string          `json:"recent_actions"`
+	LastFailures  []string          `json:"last_failures"`
+	EgoState      string            `json:"ego_state"`
+	Mission       *MissionInfo      `json:"mission,omitempty"`
 	Facts         map[string]string `json:"facts,omitempty"`
 }
 
 type MissionInfo struct {
-	Title         string `json:"title"`
-	Goal          string `json:"goal"`
-	TimeRemaining string `json:"time_remaining"`
-	Progress      float64 `json:"progress"`
-	TTC           string  `json:"estimated_ttc"`
+	Title         string        `json:"title"`
+	Goal          string        `json:"goal"`
+	TimeRemaining string        `json:"time_remaining"`
+	Progress      float64       `json:"progress"`
+	TTC           string        `json:"estimated_ttc"`
 	SubTasks      []SubTaskInfo `json:"sub_tasks,omitempty"`
 }
 
@@ -69,13 +69,13 @@ func (p *PromptPacket) ToHjson() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	var hjsonObj interface{}
 	err = hjson.Unmarshal(data, &hjsonObj)
 	if err != nil {
 		return "", err
 	}
-	
+
 	hjsonString, err := hjson.Marshal(hjsonObj)
 	return string(hjsonString), err
 }
@@ -120,7 +120,7 @@ func ParseResponse(data string) (*ResponsePacket, error) {
 	// Use non-greedy match to find individual JSON objects
 	re := regexp.MustCompile(`(?s)\{.*?\}`)
 	matches := re.FindAllString(data, -1)
-	
+
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("no JSON found in response: %s", data)
 	}

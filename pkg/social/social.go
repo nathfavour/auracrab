@@ -1,10 +1,10 @@
 package social
 
 import (
-"context"
-"fmt"
-"strings"
-"sync"
+	"context"
+	"fmt"
+	"strings"
+	"sync"
 )
 
 // Platform defines the interface for social media automation.
@@ -26,8 +26,8 @@ type Manager struct {
 }
 
 var (
-managerInstance *Manager
-once            sync.Once
+	managerInstance *Manager
+	once            sync.Once
 )
 
 func GetManager() *Manager {

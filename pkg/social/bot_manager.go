@@ -37,7 +37,7 @@ type BotConfig struct {
 	OwnerID  string  `json:"owner_id,omitempty"`
 	Mode     BotMode `json:"mode,omitempty"`
 	Verbose  bool    `json:"verbose,omitempty"`
-	
+
 	// Social Affinity Metrics
 	MTTR          time.Duration `json:"mttr,omitempty"`
 	LastMessageAt time.Time     `json:"last_message_at,omitempty"`
@@ -63,7 +63,7 @@ func GetBotManager() *BotManager {
 	botOnce.Do(func() {
 		path := filepath.Join(config.DataDir(), "bots.json")
 		botManagerInstance = &BotManager{
-			path: path,
+			path:      path,
 			providers: make(map[string]MessengerProvider),
 			shellBlacklist: []string{
 				"rm ", "mkfs", "dd ", "fdisk", "reboot", "shutdown", "init ",
@@ -166,11 +166,12 @@ func (bm *BotManager) runBot(ctx context.Context, cfg *BotConfig, history *memor
 	// Set commands
 	commands := []BotCommand{
 		{Text: "start", Description: "Start the bot and get the menu"},
-		{Text: "status", Description: "Check system and bot status"},
+		{Text: "mode", Description: "Switch agent operational mode"},
+		{Text: "pay", Description: "Initiate experimental x402 payment"},
+		{Text: "wallet", Description: "Check agent wallet balance (Base/Sepolia)"},
+		{Text: "settle", Description: "Verify and settle pending intents"},
+		{Text: "status", Description: "Check system and bot health"},
 		{Text: "mission", Description: "Show current mission and deadline"},
-		{Text: "ego", Description: "Check agent's drives and opinions"},
-		{Text: "grievances", Description: "Show what the agent is currently annoyed about"},
-		{Text: "update", Description: "Request an autonomous self-update"},
 		{Text: "help", Description: "Show help information"},
 	}
 	p.SetCommands(commands)
@@ -247,7 +248,7 @@ func (bm *BotManager) sendWelcome(p MessengerProvider, chatID string, cfg *BotCo
 		opts.Keyboard = TelegramModeKeyboard
 	}
 	p.SendMessage(chatID, "Welcome, Boss. I am your Auracrab Gateway. I've registered you as my owner.", opts)
-	
+
 	bm.mu.Lock()
 	cfg.LastMessageAt = time.Now()
 	bm.mu.Unlock()
@@ -268,16 +269,31 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 		return true
 	}
 
+	if text == "/mode" || strings.HasPrefix(text, "/mode_") {
+		bm.handleModeSwitch(p, cfg, update)
+		return true
+	}
+
+	if text == "/pay" || strings.HasPrefix(text, "/pay_") || text == "/wallet" || strings.HasPrefix(text, "/wallet_") || text == "/settle" || strings.HasPrefix(text, "/settle_") {
+		bm.handleSettlerCommand(ctx, p, cfg, update)
+		return true
+	}
+
 	if !strings.HasPrefix(text, "/") && !strings.HasPrefix(text, "Mode:") {
 		return false
+	}
+
+	if text == "/start" {
+		bm.sendWelcome(p, update.ChatID, cfg)
+		return true
 	}
 
 	// Route through the agentic loop even for commands
 	// This allows the agent to challenge or mock the command request.
 	p.SendAction(update.ChatID, ActionTyping)
-	
+
 	prompt := fmt.Sprintf("USER COMMAND: %s\n\nHandle this command. You can choose to execute it, ignore it, or challenge the user. Be punchy and mocking if you feel like it.", text)
-	
+
 	// Record in history first
 	hist, _ := memory.NewHistoryStore()
 	convID, _ := hist.GetOrCreateConversationForPlatform(cfg.Platform, cfg.OwnerID)
@@ -294,7 +310,7 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 		p.SendMessage(update.ChatID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
 		hist, _ := memory.NewHistoryStore()
 		_ = hist.AddMessage(convID, "assistant", finalReply)
-		
+
 		// Update MTTR since we sent a reply
 		bm.mu.Lock()
 		cfg.LastMessageAt = time.Now()
@@ -305,22 +321,88 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 	return true
 }
 
-func (bm *BotManager) handleModeSwitch(p MessengerProvider, cfg *BotConfig, text string) {
+func (bm *BotManager) handleSettlerCommand(ctx context.Context, p MessengerProvider, cfg *BotConfig, update Update) {
+	cmd := update.Text
+	p.SendAction(update.ChatID, ActionTyping)
+
+	// Simulation of SettlerEngine (Experimental Demo)
+	// In production, this would dial UDS: ~/.config/settlerengine/settler.sock
+
+	switch {
+	case cmd == "/wallet" || cmd == "/wallet_info":
+		resp := "💳 *SettlerEngine Wallet (Demo)*\n\n" +
+			"*Address:* `0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199`\n" +
+			"*Network:* Base Sepolia (84532)\n" +
+			"*Balance:* `42.069 USDC`\n\n" +
+			"_Status: Connected via UDS_"
+		p.SendMessage(update.ChatID, resp, MessageOptions{ParseMode: ParseModeMarkdown})
+
+	case cmd == "/pay":
+		opts := MessageOptions{ParseMode: ParseModeMarkdown}
+		if cfg.Platform == "telegram" {
+			opts.Keyboard = NewPaymentKeyboard()
+		}
+		p.SendMessage(update.ChatID, "💸 *Experimental Payment Support*\nInitiate an x402 settlement via SettlerEngine:", opts)
+
+	case strings.HasPrefix(cmd, "/pay_"):
+		amount := "1.0"
+		if cmd == "/pay_1_usdc" {
+			amount = "1.0"
+		}
+		resp := fmt.Sprintf("💸 *Payment Initiated*\n\n"+
+			"*Amount:* `%s USDC`\n"+
+			"*Recipient:* `0xMerchant...`\n"+
+			"*Protocol:* x402 Handshake\n\n"+
+			"⏳ _Waiting for signature verification..._\n"+
+			"✅ _SettlerEngine: Payment intent signed and broadcast._\n\n"+
+			"*TX:* [0xabc123...](https://sepolia.basescan.org/tx/mock)", amount)
+		p.SendMessage(update.ChatID, resp, MessageOptions{ParseMode: ParseModeMarkdown})
+
+	case cmd == "/settle" || cmd == "/settle_all":
+		resp := "🔄 *Settlement Engine*\n\n" +
+			"Searching for pending x402 intents...\n" +
+			"Found 1 pending settlement from `0xabc...`\n\n" +
+			"✅ *Settled:* 0.5 USDC\n" +
+			"Total processed: 0.5 USDC"
+		p.SendMessage(update.ChatID, resp, MessageOptions{ParseMode: ParseModeMarkdown})
+	}
+}
+
+func (bm *BotManager) handleModeSwitch(p MessengerProvider, cfg *BotConfig, update Update) {
+	text := update.Text
 	newMode := ""
-	if strings.Contains(text, "Chat") {
+
+	// Handle inline callback data
+	switch text {
+	case "/mode_chat":
 		newMode = string(ModeChat)
-	} else if strings.Contains(text, "Agent") {
+	case "/mode_agent":
 		newMode = string(ModeAgent)
-	} else if strings.Contains(text, "Shell") {
+	case "/mode_shell":
 		newMode = string(ModeShell)
-	} else {
-		parts := strings.Split(text, " ")
-		if len(parts) > 1 {
-			newMode = strings.ToLower(parts[1])
+	}
+
+	// Handle text-based mode switch
+	if newMode == "" {
+		if strings.Contains(text, "Chat") {
+			newMode = string(ModeChat)
+		} else if strings.Contains(text, "Agent") {
+			newMode = string(ModeAgent)
+		} else if strings.Contains(text, "Shell") {
+			newMode = string(ModeShell)
 		}
 	}
 
-	if newMode == "chat" || newMode == "agent" || newMode == "shell" {
+	if text == "/mode" {
+		opts := MessageOptions{ParseMode: ParseModeMarkdown}
+		if cfg.Platform == "telegram" {
+			opts.Keyboard = NewModeInlineKeyboard()
+		}
+		p.SendMessage(update.ChatID, "⚙️ *Operational Mode*\nSelect the agent's current focus:", opts)
+		return
+	}
+
+	if newMode != "" {
 		cfg.Mode = BotMode(newMode)
 		bm.UpdateBot(*cfg)
 		opts := MessageOptions{}
@@ -355,7 +437,7 @@ func (bm *BotManager) handleShellMode(ctx context.Context, p MessengerProvider, 
 		}
 	}
 	p.SendMessage(cfg.OwnerID, resp, MessageOptions{ParseMode: ParseModeHTML})
-	
+
 	bm.mu.Lock()
 	cfg.LastMessageAt = time.Now()
 	bm.mu.Unlock()

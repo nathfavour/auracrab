@@ -19,13 +19,13 @@ var botAddCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		platform, _ := cmd.Flags().GetString("platform")
 		bm := social.GetBotManager()
-		
+
 		cfg := social.BotConfig{
 			Name:     args[0],
 			Token:    args[1],
 			Platform: platform,
 		}
-		
+
 		if err := bm.AddBot(cfg); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			return
@@ -40,12 +40,12 @@ var botListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		bm := social.GetBotManager()
 		bots := bm.ListBots()
-		
+
 		if len(bots) == 0 {
 			fmt.Println("No bots registered.")
 			return
 		}
-		
+
 		for _, b := range bots {
 			owner := "Unregistered"
 			if b.OwnerID != "" {
@@ -58,7 +58,7 @@ var botListCmd = &cobra.Command{
 
 func init() {
 	botAddCmd.Flags().StringP("platform", "p", "telegram", "Platform for the bot (telegram/discord)")
-	
+
 	botCmd.AddCommand(botAddCmd)
 	botCmd.AddCommand(botListCmd)
 	rootCmd.AddCommand(botCmd)

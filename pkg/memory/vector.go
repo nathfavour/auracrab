@@ -11,10 +11,10 @@ import (
 )
 
 type VectorEntry struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
+	ID        string                 `json:"id"`
+	Content   string                 `json:"content"`
 	Metadata  map[string]interface{} `json:"metadata"`
-	Embedding []float64 `json:"embedding"`
+	Embedding []float64              `json:"embedding"`
 }
 
 type VectorStore struct {
@@ -45,7 +45,7 @@ func NewVectorStore(name string) (*VectorStore, error) {
 func (vs *VectorStore) Add(id, content string, metadata map[string]interface{}, embedding []float64) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
-	
+
 	vs.entries = append(vs.entries, VectorEntry{
 		ID:        id,
 		Content:   content,

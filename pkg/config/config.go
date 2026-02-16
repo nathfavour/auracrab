@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	Version   = "dev"
-	Commit    = "none"
-	BuildDate = "unknown"
+	Version      = "dev"
+	Commit       = "none"
+	BuildDate    = "unknown"
 	currentAgent = "auracrab"
 )
 
@@ -21,9 +21,9 @@ func SetCurrentAgent(handle string) {
 func DataDir() string {
 	home, _ := os.UserHomeDir()
 	path := filepath.Join(home, ".auracrab", "agents", currentAgent)
-	
+
 	// Migration check: if ~/.auracrab/agents/{handle} doesn't exist but ~/.auracrab/tasks.json exists
-	// and we are looking for the default agent, we might want to migrate. 
+	// and we are looking for the default agent, we might want to migrate.
 	// For now, just ensure the dir exists.
 	_ = os.MkdirAll(path, 0755)
 	return path

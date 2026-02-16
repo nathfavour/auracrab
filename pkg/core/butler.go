@@ -71,7 +71,7 @@ type Butler struct {
 	Missions  *mission.Manager
 	Ego       *ego.Ego
 	channels  map[string]connect.Channel
-	
+
 	highQueue   chan QueuedMessage
 	normalQueue chan QueuedMessage
 	lowQueue    chan QueuedMessage
@@ -271,7 +271,7 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 
 	// Record incoming message in history
 	convID, err := b.History.GetOrCreateConversationForPlatform(msg.Platform, msg.ChatID)
-	
+
 	// Fetch conversation history for context BEFORE adding current message
 	historyText := ""
 	if convID != "" {
@@ -313,15 +313,15 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 		// Context with hard timeout for the entire processing
 		_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
-		
+
 		intent := "ask" // Default to documented 'ask' intent
 		lowerText := strings.ToLower(msg.Text)
 		if strings.Contains(lowerText, "plan") || strings.Contains(lowerText, "analyze") || strings.Contains(lowerText, "status") {
 			intent = "plan"
 		}
-		if strings.HasPrefix(lowerText, "create") || strings.HasPrefix(lowerText, "update") || 
-		   strings.HasPrefix(lowerText, "delete") || strings.HasPrefix(lowerText, "list") ||
-		   strings.Contains(lowerText, "task") || strings.Contains(lowerText, "run") {
+		if strings.HasPrefix(lowerText, "create") || strings.HasPrefix(lowerText, "update") ||
+			strings.HasPrefix(lowerText, "delete") || strings.HasPrefix(lowerText, "list") ||
+			strings.Contains(lowerText, "task") || strings.Contains(lowerText, "run") {
 			intent = "crud"
 		}
 
@@ -471,10 +471,10 @@ func (b *Butler) GetStatus() string {
 
 func (b *Butler) WatchHealth() string {
 	home, _ := os.UserHomeDir()
-	
+
 	// Use a non-blocking health check or one with a very short timeout
 	client := vibe.NewClient()
-	
+
 	// Use a separate goroutine for the ping to avoid hanging the butler if the socket is stuck
 	pingDone := make(chan error, 1)
 	go func() {
@@ -525,7 +525,7 @@ func (b *Butler) restartVibeaura() {
 	// Try to stop it first just in case
 	_ = exec.Command("vibeaura", "stop").Run()
 	time.Sleep(1 * time.Second)
-	
+
 	// Start it
 	cmd := exec.Command("vibeaura", "start")
 	err := cmd.Start()
@@ -533,7 +533,7 @@ func (b *Butler) restartVibeaura() {
 		fmt.Printf("Butler: Failed to restart vibeaura: %v\n", err)
 		return
 	}
-	
+
 	// Wait a bit for it to initialize
 	time.Sleep(3 * time.Second)
 	fmt.Println("Butler: Vibeaura restart attempt completed.")

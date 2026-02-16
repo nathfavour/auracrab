@@ -13,16 +13,16 @@ type Vault struct {
 }
 
 var (
-instance *Vault
-once     sync.Once
+	instance *Vault
+	once     sync.Once
 )
 
 func GetVault() *Vault {
 	once.Do(func() {
 		instance = &Vault{}
 		ring, err := keyring.Open(keyring.Config{
-ServiceName: "auracrab",
-})
+			ServiceName: "auracrab",
+		})
 		if err == nil {
 			instance.ring = ring
 		}
@@ -33,9 +33,9 @@ ServiceName: "auracrab",
 func (v *Vault) Set(key, value string) error {
 	if v.ring != nil {
 		err := v.ring.Set(keyring.Item{
-Key:  key,
-Data: []byte(value),
-})
+			Key:  key,
+			Data: []byte(value),
+		})
 		if err == nil {
 			return nil
 		}
