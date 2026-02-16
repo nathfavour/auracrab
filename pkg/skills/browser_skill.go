@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"github.com/nathfavour/auracrab/pkg/connect"
 )
@@ -151,6 +152,11 @@ func (s *BrowserSkill) wait(ctx context.Context, condition string, contextStr st
 }
 
 func (s *BrowserSkill) open(ctx context.Context, url string, contextStr string) (string, error) {
+	// Intelligent URL Discovery: if not a URL, treat as a search query
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") && !strings.Contains(url, ".") {
+		url = "https://www.google.com/search?q=" + strings.ReplaceAll(url, " ", "+")
+	}
+
 	bc := connect.GetBrowserChannel()
 	if bc != nil && bc.IsActive() {
 		targetInstance := ""

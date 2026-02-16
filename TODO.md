@@ -21,7 +21,7 @@ Implementing human-like, multi-tenant browser automation integrated directly int
     - `hover(selector)`: Move "virtual" cursor.
     - `wait(condition)`: Intelligent waiting for DOM elements or network idle.
 - [x] **Visual Context**: Enable extension to capture screenshots or DOM snapshots for the AI to "see" the page layout.
-- [ ] **Intelligent URL Discovery**: Agent can perform Google searches or guess URLs based on service names if not provided.
+- [x] **Intelligent URL Discovery**: Agent can perform Google searches or guess URLs based on service names if not provided.
 
 ## Phase 4: Full Tool Integration & Autonomy
 - [x] **Zero-Headless Philosophy**: Ensure 100% of automation happens in the user's local session, avoiding bot detection and leveraging existing auth.
@@ -32,4 +32,4 @@ Implementing human-like, multi-tenant browser automation integrated directly int
 ## Phase 5: Hardcode-Free Intelligence
 - [x] **Dynamic Manifests**: No hardcoded selectors; AI should analyze the DOM (via `scrape_interactive`) to find interaction points.
 - [x] **Self-Correcting Scripts**: If a click fails, the AI should retry with a different selector or strategy in its autonomous loop.
-- [ ] **Toolkit-to-Browser Mapping**: Mapping all Auracrab skills (Vault, Memory, Crabs) so they can be triggered from or feed into browser automation.
+- [x] **Toolkit-to-Browser Mapping**: Mapping all Auracrab skills (Vault, Memory, Crabs) so they can be triggered from or feed into browser automation.

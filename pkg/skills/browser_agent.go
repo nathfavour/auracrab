@@ -47,13 +47,15 @@ func (s *BrowserAgentSkill) Manifest() []byte {
 }
 
 type BrowserStepAction struct {
-	Action    string `json:"action"`
-	URL       string `json:"url,omitempty"`
-	Selector  string `json:"selector,omitempty"`
-	Text      string `json:"text,omitempty"`
-	Condition string `json:"condition,omitempty"`
-	Reasoning string `json:"reasoning"`
-	Finished  bool   `json:"finished"`
+	Action    string          `json:"action"`
+	URL       string          `json:"url,omitempty"`
+	Selector  string          `json:"selector,omitempty"`
+	Text      string          `json:"text,omitempty"`
+	Condition string          `json:"condition,omitempty"`
+	SkillName string          `json:"skill_name,omitempty"`
+	SkillArgs json.RawMessage `json:"skill_args,omitempty"`
+	Reasoning string          `json:"reasoning"`
+	Finished  bool            `json:"finished"`
 }
 
 func (s *BrowserAgentSkill) Execute(ctx context.Context, args json.RawMessage) (string, error) {
@@ -132,7 +134,7 @@ func (s *BrowserAgentSkill) observe(ctx context.Context, bc *connect.BrowserChan
 }
 
 func (s *BrowserAgentSkill) planNextStep(ctx context.Context, client *vibe.Client, goal, observation string, history []string) (*BrowserStepAction, error) {
-	prompt := fmt.Sprintf("You are an autonomous browser agent.\nGOAL: %s\n\nHISTORY:\n%s\n\nCURRENT PAGE OBSERVATION (Interactive Elements):\n%s\n\nYour task is to decide the next single action to take to reach the goal.\nAvailable actions:\n- open (url: string)\n- click (selector: string)\n- type (selector: string, text: string)\n- hover (selector: string)\n- wait (condition: string - e.g. \"selector:.class\" or \"2000\")\n- finished (text: string - use this when the goal is achieved, provide final answer in 'text')\n\nReturn ONLY a JSON object:\n{\n  \"action\": \"open|click|type|hover|wait|finished\",\n  \"url\": \"...\",\n  \"selector\": \"...\",\n  \"text\": \"...\",\n  \"condition\": \"...\",\n  \"reasoning\": \"why you are taking this step\",\n  \"finished\": true|false\n}", goal, strings.Join(history, "\n"), observation)
+	prompt := fmt.Sprintf("You are an autonomous browser agent.\nGOAL: %s\n\nHISTORY:\n%s\n\nCURRENT PAGE OBSERVATION (Interactive Elements):\n%s\n\nYour task is to decide the next single action to take to reach the goal.\nAvailable actions:\n- open (url: string)\n- click (selector: string)\n- type (selector: string, text: string)\n- hover (selector: string)\n- wait (condition: string - e.g. \"selector:.class\" or \"2000\")\n- call_skill (skill_name: string, skill_args: object) - Use other skills like 'vault' or 'memory'\n- finished (text: string - use this when the goal is achieved, provide final answer in 'text')\n\nReturn ONLY a JSON object:\n{\n  \"action\": \"open|click|type|hover|wait|call_skill|finished\",\n  \"url\": \"...\",\n  \"selector\": \"...\",\n  \"text\": \"...\",\n  \"condition\": \"...\",\n  \"skill_name\": \"...\",\n  \"skill_args\": {},\n  \"reasoning\": \"why you are taking this step\",\n  \"finished\": true|false\n}", goal, strings.Join(history, "\n"), observation)
 
 	res, err := client.Query(prompt, "plan")
 	if err != nil {
@@ -167,6 +169,13 @@ func (s *BrowserAgentSkill) executeStep(ctx context.Context, bc *connect.Browser
 		command = "hover " + step.Selector
 	case "wait":
 		command = "wait " + step.Condition
+	case "call_skill":
+		reg := GetRegistry()
+		skill, ok := reg.Get(step.SkillName)
+		if !ok {
+			return "", fmt.Errorf("skill not found: %s", step.SkillName)
+		}
+		return skill.Execute(ctx, step.SkillArgs)
 	case "finished":
 		return "Goal achieved: " + step.Text, nil
 	default:
