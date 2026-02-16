@@ -9,10 +9,28 @@ var (
 	Version   = "dev"
 	Commit    = "none"
 	BuildDate = "unknown"
+	currentAgent = "auracrab"
 )
 
-// DataDir returns the path to the auracrab data directory (~/.auracrab)
+// SetCurrentAgent sets the agent handle for the current execution context
+func SetCurrentAgent(handle string) {
+	currentAgent = handle
+}
+
+// DataDir returns the path to the current agent's data directory (~/.auracrab/agents/{handle})
 func DataDir() string {
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, ".auracrab", "agents", currentAgent)
+	
+	// Migration check: if ~/.auracrab/agents/{handle} doesn't exist but ~/.auracrab/tasks.json exists
+	// and we are looking for the default agent, we might want to migrate. 
+	// For now, just ensure the dir exists.
+	_ = os.MkdirAll(path, 0755)
+	return path
+}
+
+// BaseDataDir returns the root ~/.auracrab directory
+func BaseDataDir() string {
 	home, _ := os.UserHomeDir()
 	path := filepath.Join(home, ".auracrab")
 	_ = os.MkdirAll(path, 0755)
