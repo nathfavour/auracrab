@@ -12,11 +12,12 @@ import (
 )
 
 type BrowserClient struct {
-	Conn      *websocket.Conn
-	UserAgent string
-	Profile   string
-	WindowID  string
-	Connected time.Time
+	Conn       *websocket.Conn
+	UserAgent  string
+	Profile    string
+	InstanceID string
+	WindowID   string
+	Connected  time.Time
 }
 
 type BrowserChannel struct {
@@ -106,10 +107,12 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 		}
 
 		var msg struct {
-			Type    string `json:"type"`
-			Content string `json:"content"`
-			ID      string `json:"id"`
-			Profile string `json:"profile,omitempty"`
+			Type       string `json:"type"`
+			Content    string `json:"content"`
+			ID         string `json:"id"`
+			Profile    string `json:"profile,omitempty"`
+			InstanceID string `json:"instanceId,omitempty"`
+			WindowID   string `json:"windowId,omitempty"`
 		}
 		if err := json.Unmarshal(message, &msg); err != nil {
 			continue
@@ -118,8 +121,10 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 		if msg.Type == "register" {
 			c.mu.Lock()
 			client.Profile = msg.Profile
+			client.InstanceID = msg.InstanceID
+			client.WindowID = msg.WindowID
 			c.mu.Unlock()
-			fmt.Printf("Browser: Registered profile %s\n", msg.Profile)
+			fmt.Printf("Browser: Registered client [%s] window %s (Profile: %s)\n", msg.InstanceID, msg.WindowID, msg.Profile)
 			continue
 		}
 
@@ -141,7 +146,7 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (c *BrowserChannel) Request(ctx context.Context, command string) (string, error) {
+func (c *BrowserChannel) Request(ctx context.Context, targetInstance string, command string) (string, error) {
 	if !c.IsActive() {
 		return "", fmt.Errorf("no browser extension connected")
 	}
@@ -158,10 +163,21 @@ func (c *BrowserChannel) Request(ctx context.Context, command string) (string, e
 	})
 
 	c.mu.RLock()
-	for conn := range c.clients {
-		_ = conn.WriteMessage(websocket.TextMessage, payload)
+	var sent bool
+	for _, client := range c.clients {
+		if targetInstance == "" || client.InstanceID == targetInstance {
+			_ = client.Conn.WriteMessage(websocket.TextMessage, payload)
+			sent = true
+			if targetInstance != "" {
+				break
+			}
+		}
 	}
 	c.mu.RUnlock()
+
+	if !sent {
+		return "", fmt.Errorf("target browser instance not found: %s", targetInstance)
+	}
 
 	select {
 	case resp := <-ch:

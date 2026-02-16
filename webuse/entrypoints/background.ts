@@ -8,11 +8,22 @@ export default defineBackground(() => {
 
     socket.onopen = async () => {
       console.log('Connected to Auracrab backend');
-      // Identify profile
+      
+      // Get or create a unique instance ID for this browser installation
+      let { instanceId } = await browser.storage.local.get('instanceId');
+      if (!instanceId) {
+        instanceId = crypto.randomUUID();
+        await browser.storage.local.set({ instanceId });
+      }
+
+      const window = await browser.windows.getCurrent();
       const info = await browser.runtime.getPlatformInfo();
+      
       socket?.send(JSON.stringify({
         type: 'register',
         profile: `browser-${info.os}`,
+        instanceId: instanceId,
+        windowId: window.id?.toString(),
       }));
     };
 
