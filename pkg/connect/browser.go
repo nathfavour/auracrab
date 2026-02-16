@@ -11,12 +11,19 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type BrowserTab struct {
+	ID    int    `json:"id"`
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
 type BrowserClient struct {
 	Conn       *websocket.Conn
 	UserAgent  string
 	Profile    string
 	InstanceID string
 	WindowID   string
+	Tabs       []BrowserTab
 	Connected  time.Time
 }
 

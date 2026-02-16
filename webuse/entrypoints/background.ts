@@ -17,6 +17,7 @@ export default defineBackground(() => {
       }
 
       const window = await browser.windows.getCurrent();
+      const tabs = await browser.tabs.query({ windowId: window.id });
       const info = await browser.runtime.getPlatformInfo();
       
       socket?.send(JSON.stringify({
@@ -24,6 +25,7 @@ export default defineBackground(() => {
         profile: `browser-${info.os}`,
         instanceId: instanceId,
         windowId: window.id?.toString(),
+        tabs: tabs.map(t => ({ id: t.id, url: t.url, title: t.title }))
       }));
     };
 
