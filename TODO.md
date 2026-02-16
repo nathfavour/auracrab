@@ -1,36 +1,35 @@
-# Auracrab: Multi-Tenant Agentic Framework Roadmap
+# Auracrab: Browser-Native Agent Framework (Web Use)
 
-Transitioning from a monolithic agent to a multi-user, multi-agent operating framework.
+Implementing human-like, multi-tenant browser automation integrated directly into the Auracrab toolkit.
 
-## Phase 1: Identity & Isolation (Architectural Foundation)
-- [ ] **Agent Identity Schema**: Define `Agent` struct in `pkg/identity` (ID, Handle, DisplayName, CreatedAt).
-- [ ] **Global Registry**: Implement a global agent registry in `~/.auracrab/registry.json` to track all local agent accounts.
-- [ ] **Path Namespacing**: Refactor `pkg/config` to support namespaced data directories: `~/.auracrab/agents/{agent_id}/`.
-- [ ] **Context Propagation**: Update core functions to accept `context.Context` carrying the `AgentID`.
-- [ ] **Migration Tool**: Create a script/function to migrate existing monolithic data to the `auracrab` (default) agent namespace.
+## Phase 1: Bridge & Connectivity (Completed)
+- [x] **WebSocket Bridge**: Established `pkg/connect/browser.go` for real-time agent-to-extension communication.
+- [x] **WXT Extension Skeleton**: Initialized `webuse/` extension with permissions for tab control and scripting.
+- [x] **Basic Command Loop**: Support for `open` and `scrape` commands via WebSocket.
+- [x] **Browser Skill Integration**: Refactored `pkg/skills/browser_skill.go` to leverage the extension when available.
 
-## Phase 2: Multi-Butler Orchestration
-- [ ] **Butler Refactoring**: De-singletonize `pkg/core/butler.go`. Enable instantiation with a specific `AgentID`.
-- [ ] **Butler Manager**: Implement a manager to handle the lifecycle (Start/Stop/Status) of multiple agent instances concurrently.
-- [ ] **Resource Isolation**: Ensure each `Butler` instance has its own:
-    - Task Queue & Scheduler
-    - Memory Stores (Vector & History)
-    - Secret Vault
-    - Social Bot Integrations
-- [ ] **Shared Framework**: Ensure all agents leverage the same `pkg/crabs` (specialized agent skills) while maintaining private `Crab` registries.
+## Phase 2: Multi-Session & Profile Intelligence
+- [ ] **Profile Identification**: Enhance extension to report specific browser profiles, window IDs, and account contexts.
+- [ ] **Intelligent Client Registry**: Update `BrowserChannel` to track and address specific browser windows or profiles.
+- [ ] **Account-Aware Automation**: Ability for the agent to say "Use the browser profile where I'm logged into Twitter."
+- [ ] **Context Switching**: Allow the agent to multiplex commands across different browser instances.
 
-## Phase 3: CLI & UX for Multi-Tenancy
-- [ ] **Agent Management Commands**:
-    - `auracrab agents create <handle>`: Provision a new clean-slate agent.
-    - `auracrab agents list`: View all managed agents.
-    - `auracrab agents delete <handle>`: Wipe an agent's data.
-- [ ] **Context Switching**:
-    - Implement a global `--agent <handle>` flag for all CLI commands.
-    - `auracrab agents switch <handle>`: Set the default agent for the current session.
-- [ ] **Multi-Agent TUI**: Update the TUI to allow switching between agent dashboards or viewing a consolidated view.
+## Phase 3: Human-Like Automation Toolkit
+- [ ] **Advanced Interaction Skill**: Implement JSON-based high-level actions:
+    - `click(selector)`: Smooth scroll + natural click.
+    - `type(selector, text)`: Simulated keystrokes with varied delays.
+    - `hover(selector)`: Move "virtual" cursor.
+    - `wait(condition)`: Intelligent waiting for DOM elements or network idle.
+- [ ] **Visual Context**: Enable extension to capture screenshots or DOM snapshots for the AI to "see" the page layout.
+- [ ] **Intelligent URL Discovery**: Agent can perform Google searches or guess URLs based on service names if not provided.
 
-## Phase 4: Robustness & Scaling
-- [ ] **Database Integration**: (Optional/Future) Transition from flat JSON files to an embedded DB (e.g., SQLite) for better multi-user performance.
-- [ ] **Permission System**: Basic read/write permissions for shared resources between agents.
-- [ ] **Framework SDK**: Refine `pkg/core` so third-party developers can easily "plug in" new agent logic while leveraging the Auracrab framework.
-- [ ] **Millions-Scale POC**: Test the framework's ability to handle high volumes of idle/active agent identities.
+## Phase 4: Full Tool Integration & Autonomy
+- [ ] **Zero-Headless Philosophy**: Ensure 100% of automation happens in the user's local session, avoiding bot detection and leveraging existing auth.
+- [ ] **Autonomous Browser Missions**: Support long-running tasks that involve navigating complex web workflows (e.g., "Find the latest invoice on Stripe and upload it to the vault").
+- [ ] **Human-Agent Handover**: UI in the extension to allow the human to take over or provide input when the AI is stuck.
+- [ ] **Account Independent Treatment**: Ensure the AI treats different accounts of the same service (e.g., Personal vs Work Gmail) as distinct entities.
+
+## Phase 5: Hardcode-Free Intelligence
+- [ ] **Dynamic Manifests**: No hardcoded selectors; AI should analyze the DOM to find interaction points.
+- [ ] **Self-Correcting Scripts**: If a click fails, the AI should retry with a different selector or strategy.
+- [ ] **Toolkit-to-Browser Mapping**: Mapping all Auracrab skills (Vault, Memory, Crabs) so they can be triggered from or feed into browser automation.

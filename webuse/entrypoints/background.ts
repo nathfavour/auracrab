@@ -6,8 +6,14 @@ export default defineBackground(() => {
   function connect() {
     socket = new WebSocket('ws://localhost:9999/ws');
 
-    socket.onopen = () => {
+    socket.onopen = async () => {
       console.log('Connected to Auracrab backend');
+      // Identify profile
+      const info = await browser.runtime.getPlatformInfo();
+      socket?.send(JSON.stringify({
+        type: 'register',
+        profile: `browser-${info.os}`,
+      }));
     };
 
     socket.onmessage = async (event) => {
@@ -35,24 +41,63 @@ export default defineBackground(() => {
   }
 
   async function handleCommand(command: string, id?: string) {
-    // Basic command parser
-    if (command.startsWith('open ')) {
-      const url = command.substring(5);
-      await browser.tabs.create({ url });
-    } else if (command === 'scrape') {
-      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-      if (tabs[0]?.id) {
-        const results = await browser.scripting.executeScript({
-          target: { tabId: tabs[0].id },
-          func: () => document.body.innerText,
-        });
-        socket?.send(JSON.stringify({
-          type: 'response',
-          content: results[0].result,
-          id,
-        }));
+    try {
+      if (command.startsWith('open ')) {
+        const url = command.substring(5);
+        await browser.tabs.create({ url });
+        sendResponse(id, "Opened " + url);
+      } else if (command === 'scrape') {
+        const results = await executeInActiveTab(() => document.body.innerText);
+        sendResponse(id, results[0]?.result || "");
+      } else if (command.startsWith('click ')) {
+        const selector = command.substring(6);
+        await executeInActiveTab((sel) => {
+          const el = document.querySelector(sel) as HTMLElement;
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.click();
+            return "Clicked " + sel;
+          }
+          return "Element not found: " + sel;
+        }, [selector]);
+        sendResponse(id, "Click command sent for " + selector);
+      } else if (command.startsWith('type ')) {
+        const parts = command.substring(5).split(' ');
+        const selector = parts[0];
+        const text = parts.slice(1).join(' ');
+        await executeInActiveTab((sel, txt) => {
+          const el = document.querySelector(sel) as HTMLInputElement;
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.focus();
+            el.value = txt;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            return "Typed into " + sel;
+          }
+          return "Element not found: " + sel;
+        }, [selector, text]);
+        sendResponse(id, "Type command sent for " + selector);
       }
+    } catch (err) {
+      sendResponse(id, "Error: " + String(err));
     }
+  }
+
+  function sendResponse(id: string | undefined, content: string) {
+    if (id && socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'response', content, id }));
+    }
+  }
+
+  async function executeInActiveTab<T>(func: (...args: any[]) => T, args: any[] = []): Promise<any[]> {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tabs[0]?.id) throw new Error("No active tab");
+    return browser.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      func,
+      args,
+    });
   }
 
   connect();

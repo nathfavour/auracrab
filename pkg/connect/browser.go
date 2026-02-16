@@ -11,16 +11,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type BrowserClient struct {
+	Conn      *websocket.Conn
+	UserAgent string
+	Profile   string
+	WindowID  string
+	Connected time.Time
+}
+
 type BrowserChannel struct {
 	mu          sync.RWMutex
-	clients     map[*websocket.Conn]bool
+	clients     map[*websocket.Conn]*BrowserClient
 	onMessage   func(platform string, chatID string, from string, text string) string
 	upgrader    websocket.Upgrader
 	port        int
 	pendingResp sync.Map // map[string]chan string
 }
-
-var globalBrowserChannel *BrowserChannel
 
 func GetBrowserChannel() *BrowserChannel {
 	return globalBrowserChannel
@@ -28,7 +34,7 @@ func GetBrowserChannel() *BrowserChannel {
 
 func NewBrowserChannel(port int) *BrowserChannel {
 	globalBrowserChannel = &BrowserChannel{
-		clients: make(map[*websocket.Conn]bool),
+		clients: make(map[*websocket.Conn]*BrowserClient),
 		port:    port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
@@ -77,8 +83,14 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 	}
 	defer conn.Close()
 
+	client := &BrowserClient{
+		Conn:      conn,
+		Connected: time.Now(),
+		UserAgent: r.Header.Get("User-Agent"),
+	}
+
 	c.mu.Lock()
-	c.clients[conn] = true
+	c.clients[conn] = client
 	c.mu.Unlock()
 
 	defer func() {
@@ -97,8 +109,17 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 			Type    string `json:"type"`
 			Content string `json:"content"`
 			ID      string `json:"id"`
+			Profile string `json:"profile,omitempty"`
 		}
 		if err := json.Unmarshal(message, &msg); err != nil {
+			continue
+		}
+
+		if msg.Type == "register" {
+			c.mu.Lock()
+			client.Profile = msg.Profile
+			c.mu.Unlock()
+			fmt.Printf("Browser: Registered profile %s\n", msg.Profile)
 			continue
 		}
 
