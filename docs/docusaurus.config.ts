@@ -14,7 +14,10 @@ const config: Config = {
   projectName: 'auracrab',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
+
+  markdown: {
+    onBrokenMarkdownLinks: 'warn',
+  },
 
   i18n: {
     defaultLocale: 'en',
