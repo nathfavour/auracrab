@@ -91,6 +91,8 @@ func (p *TelegramProvider) SendMessage(chatID string, text string, options Messa
 	msg := tgbotapi.NewMessage(id, text)
 	if options.ParseMode == ParseModeHTML {
 		msg.ParseMode = "HTML"
+	} else if options.ParseMode == ParseModeMarkdown {
+		msg.ParseMode = "Markdown"
 	}
 	if options.Keyboard != nil {
 		msg.ReplyMarkup = options.Keyboard

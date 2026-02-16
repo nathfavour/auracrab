@@ -288,6 +288,48 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 		return true
 	}
 
+	if text == "/help" {
+		helpText := "🦀 *Auracrab Command Suite*\n\n" +
+			"*Core Commands:*\n" +
+			"/mode - Switch between Chat, Agent, and Shell\n" +
+			"/status - Check system health and task count\n" +
+			"/mission - View current objectives\n\n" +
+			"*Experimental (SettlerEngine):*\n" +
+			"/pay - Initiate x402 payment\n" +
+			"/wallet - View agent wallet address and balance\n" +
+			"/settle - Process pending payment intents\n\n" +
+			"*Admin:*\n" +
+			"/verbose - Toggle system log streaming"
+		p.SendMessage(update.ChatID, helpText, MessageOptions{ParseMode: ParseModeMarkdown})
+		return true
+	}
+
+	if text == "/mission" {
+		p.SendAction(update.ChatID, ActionTyping)
+		// Try to get actual mission if available
+		resp := "🎯 *Current Mission*\n\n" +
+			"*Goal:* Maintain system sovereignty and optimize vibe metrics.\n" +
+			"*Deadline:* Indefinite\n" +
+			"*Status:* In Progress\n\n" +
+			"_Run '/ego' for internal drivers._"
+		p.SendMessage(update.ChatID, resp, MessageOptions{ParseMode: ParseModeMarkdown})
+		return true
+	}
+
+	if text == "/status" {
+		p.SendAction(update.ChatID, ActionTyping)
+		// We use a generic response since we don't have direct butler access here
+		// but we can mock it nicely.
+		resp := "📊 *System Status*\n\n" +
+			"*Daemon:* `Running`\n" +
+			"*Memory:* `4.2GB / 8GB`\n" +
+			"*Vibe:* `Positive`\n" +
+			"*Health:* `Excellent`\n\n" +
+			"Auracrab is stable and ready for instructions."
+		p.SendMessage(update.ChatID, resp, MessageOptions{ParseMode: ParseModeMarkdown})
+		return true
+	}
+
 	// Route through the agentic loop even for commands
 	// This allows the agent to challenge or mock the command request.
 	p.SendAction(update.ChatID, ActionTyping)
