@@ -114,12 +114,13 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 		}
 
 		var msg struct {
-			Type       string `json:"type"`
-			Content    string `json:"content"`
-			ID         string `json:"id"`
-			Profile    string `json:"profile,omitempty"`
-			InstanceID string `json:"instanceId,omitempty"`
-			WindowID   string `json:"windowId,omitempty"`
+			Type       string       `json:"type"`
+			Content    string       `json:"content"`
+			ID         string       `json:"id"`
+			Profile    string       `json:"profile,omitempty"`
+			InstanceID string       `json:"instanceId,omitempty"`
+			WindowID   string       `json:"windowId,omitempty"`
+			Tabs       []BrowserTab `json:"tabs,omitempty"`
 		}
 		if err := json.Unmarshal(message, &msg); err != nil {
 			continue
@@ -130,8 +131,9 @@ func (c *BrowserChannel) handleWebSocket(w http.ResponseWriter, r *http.Request)
 			client.Profile = msg.Profile
 			client.InstanceID = msg.InstanceID
 			client.WindowID = msg.WindowID
+			client.Tabs = msg.Tabs
 			c.mu.Unlock()
-			fmt.Printf("Browser: Registered client [%s] window %s (Profile: %s)\n", msg.InstanceID, msg.WindowID, msg.Profile)
+			fmt.Printf("Browser: Registered client [%s] window %s (Profile: %s, Tabs: %d)\n", msg.InstanceID, msg.WindowID, msg.Profile, len(msg.Tabs))
 			continue
 		}
 
@@ -218,4 +220,31 @@ func (c *BrowserChannel) Send(to string, text string) error {
 
 func (c *BrowserChannel) Broadcast(message string) error {
 	return c.Send("", message)
+}
+
+func (c *BrowserChannel) GetClients() []*BrowserClient {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	clients := make([]*BrowserClient, 0, len(c.clients))
+	for _, client := range c.clients {
+		clients = append(clients, client)
+	}
+	return clients
+}
+
+func (c *BrowserChannel) FindClientByTab(urlPattern string) *BrowserClient {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, client := range c.clients {
+		for _, tab := range client.Tabs {
+			if contains(tab.URL, urlPattern) {
+				return client
+			}
+		}
+	}
+	return nil
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || (len(substr) > 0 && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr)))
 }
