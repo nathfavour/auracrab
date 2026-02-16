@@ -39,6 +39,10 @@ func (s *BrowserSkill) Manifest() []byte {
 				},
 				"text": {
 					"type": "string"
+				},
+				"context": {
+					"type": "string",
+					"description": "Optional keyword to identify the right browser profile/window (e.g., 'twitter', 'gmail')"
 				}
 			},
 			"required": ["action"]
@@ -52,6 +56,7 @@ func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (strin
 		URL      string `json:"url"`
 		Selector string `json:"selector"`
 		Text     string `json:"text"`
+		Context  string `json:"context"`
 	}
 	if err := json.Unmarshal(args, &params); err != nil {
 		return "", err
@@ -62,34 +67,42 @@ func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (strin
 		if params.URL == "" {
 			return "", fmt.Errorf("missing url")
 		}
-		return s.open(ctx, params.URL)
+		return s.open(ctx, params.URL, params.Context)
 	case "scrape":
-		return s.scrape(ctx, params.URL)
+		return s.scrape(ctx, params.URL, params.Context)
 	case "click":
 		if params.Selector == "" {
 			return "", fmt.Errorf("missing selector")
 		}
-		return s.click(ctx, params.Selector)
+		return s.click(ctx, params.Selector, params.Context)
 	case "type":
 		if params.Selector == "" || params.Text == "" {
 			return "", fmt.Errorf("missing selector or text")
 		}
-		return s.typeText(ctx, params.Selector, params.Text)
+		return s.typeText(ctx, params.Selector, params.Text, params.Context)
 	default:
 		return "", fmt.Errorf("unknown action: %s", params.Action)
 	}
 }
 
-func (s *BrowserSkill) open(ctx context.Context, url string) (string, error) {
+func (s *BrowserSkill) open(ctx context.Context, url string, contextStr string) (string, error) {
 	bc := connect.GetBrowserChannel()
 	if bc != nil && bc.IsActive() {
-		_, err := bc.Request(ctx, "", "open "+url)
+		targetInstance := ""
+		if contextStr != "" {
+			client := bc.FindClientByTab(contextStr)
+			if client != nil {
+				targetInstance = client.InstanceID
+			}
+		}
+		_, err := bc.Request(ctx, targetInstance, "open "+url)
 		if err == nil {
-			return fmt.Sprintf("Opened %s in browser extension", url), nil
+			return fmt.Sprintf("Opened %s in browser extension (context: %s)", url, contextStr), nil
 		}
 	}
 
 	var cmd *exec.Cmd
+	// ... existing local open logic ...
 	switch runtime.GOOS {
 	case "linux":
 		cmd = exec.Command("xdg-open", url)
@@ -106,18 +119,25 @@ func (s *BrowserSkill) open(ctx context.Context, url string) (string, error) {
 	return fmt.Sprintf("Opened %s", url), nil
 }
 
-func (s *BrowserSkill) scrape(ctx context.Context, url string) (string, error) {
+func (s *BrowserSkill) scrape(ctx context.Context, url string, contextStr string) (string, error) {
 	bc := connect.GetBrowserChannel()
 	if bc != nil && bc.IsActive() {
-		// If we have a connected browser, we can use it to scrape (even JS-heavy sites)
-		// First open the URL if it's not already open or just scrape active tab
-		// For now, let's assume we want to scrape the provided URL
-		_, _ = bc.Request(ctx, "", "open "+url)
-		// Wait a bit for load? Extensions usually handle this better
-		// For now just try to scrape
-		return bc.Request(ctx, "", "scrape")
+		targetInstance := ""
+		if contextStr != "" {
+			client := bc.FindClientByTab(contextStr)
+			if client != nil {
+				targetInstance = client.InstanceID
+			}
+		}
+		if url != "" {
+			_, _ = bc.Request(ctx, targetInstance, "open "+url)
+		}
+		return bc.Request(ctx, targetInstance, "scrape")
 	}
 
+	if url == "" {
+		return "", fmt.Errorf("missing url for non-extension scraping")
+	}
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
@@ -133,7 +153,6 @@ func (s *BrowserSkill) scrape(ctx context.Context, url string) (string, error) {
 		return "", err
 	}
 
-	// Basic truncation for now
 	content := string(body)
 	if len(content) > 5000 {
 		content = content[:5000] + "... [truncated]"
@@ -142,18 +161,32 @@ func (s *BrowserSkill) scrape(ctx context.Context, url string) (string, error) {
 	return content, nil
 }
 
-func (s *BrowserSkill) click(ctx context.Context, selector string) (string, error) {
+func (s *BrowserSkill) click(ctx context.Context, selector string, contextStr string) (string, error) {
 	bc := connect.GetBrowserChannel()
 	if bc == nil || !bc.IsActive() {
 		return "", fmt.Errorf("no browser extension connected")
 	}
-	return bc.Request(ctx, "", "click "+selector)
+	targetInstance := ""
+	if contextStr != "" {
+		client := bc.FindClientByTab(contextStr)
+		if client != nil {
+			targetInstance = client.InstanceID
+		}
+	}
+	return bc.Request(ctx, targetInstance, "click "+selector)
 }
 
-func (s *BrowserSkill) typeText(ctx context.Context, selector, text string) (string, error) {
+func (s *BrowserSkill) typeText(ctx context.Context, selector, text string, contextStr string) (string, error) {
 	bc := connect.GetBrowserChannel()
 	if bc == nil || !bc.IsActive() {
 		return "", fmt.Errorf("no browser extension connected")
 	}
-	return bc.Request(ctx, "", fmt.Sprintf("type %s %s", selector, text))
+	targetInstance := ""
+	if contextStr != "" {
+		client := bc.FindClientByTab(contextStr)
+		if client != nil {
+			targetInstance = client.InstanceID
+		}
+	}
+	return bc.Request(ctx, targetInstance, fmt.Sprintf("type %s %s", selector, text))
 }

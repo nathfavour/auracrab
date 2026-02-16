@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,14 +238,10 @@ func (c *BrowserChannel) FindClientByTab(urlPattern string) *BrowserClient {
 	defer c.mu.RUnlock()
 	for _, client := range c.clients {
 		for _, tab := range client.Tabs {
-			if contains(tab.URL, urlPattern) {
+			if strings.Contains(tab.URL, urlPattern) {
 				return client
 			}
 		}
 	}
 	return nil
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(substr) > 0 && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr)))
 }

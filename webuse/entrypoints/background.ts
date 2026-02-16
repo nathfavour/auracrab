@@ -8,7 +8,10 @@ export default defineBackground(() => {
 
     socket.onopen = async () => {
       console.log('Connected to Auracrab backend');
-      
+      await register();
+    };
+
+    async function register() {
       // Get or create a unique instance ID for this browser installation
       let { instanceId } = await browser.storage.local.get('instanceId');
       if (!instanceId) {
@@ -27,7 +30,13 @@ export default defineBackground(() => {
         windowId: window.id?.toString(),
         tabs: tabs.map(t => ({ id: t.id, url: t.url, title: t.title }))
       }));
-    };
+    }
+
+    // Update registration info when tabs change
+    browser.tabs.onUpdated.addListener(() => register());
+    browser.tabs.onRemoved.addListener(() => register());
+    browser.tabs.onCreated.addListener(() => register());
+
 
     socket.onmessage = async (event) => {
       try {
