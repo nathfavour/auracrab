@@ -71,6 +71,23 @@ export default defineBackground(() => {
       } else if (command === 'scrape') {
         const results = await executeInActiveTab(() => document.body.innerText);
         sendResponse(id, results[0]?.result || "");
+      } else if (command === 'scrape:interactive') {
+        const results = await executeInActiveTab(() => {
+          const elements = document.querySelectorAll('button, a, input, select, textarea, [role="button"]');
+          return Array.from(elements).map(el => {
+            const htmlEl = el as HTMLElement;
+            return {
+              tag: el.tagName.toLowerCase(),
+              text: htmlEl.innerText.trim().substring(0, 50),
+              placeholder: (el as HTMLInputElement).placeholder || '',
+              id: el.id,
+              className: el.className,
+              type: (el as HTMLInputElement).type || '',
+              ariaLabel: htmlEl.getAttribute('aria-label') || '',
+            };
+          });
+        });
+        sendResponse(id, JSON.stringify(results[0]?.result || []));
       } else if (command.startsWith('click ')) {
         const selector = command.substring(6);
         await executeInActiveTab(async (sel) => {

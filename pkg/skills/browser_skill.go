@@ -29,7 +29,7 @@ func (s *BrowserSkill) Manifest() []byte {
 			"properties": {
 				"action": {
 					"type": "string",
-					"enum": ["open", "scrape", "click", "type", "hover", "wait", "screenshot"]
+					"enum": ["open", "scrape", "scrape_interactive", "click", "type", "hover", "wait", "screenshot"]
 				},
 				"url": {
 					"type": "string"
@@ -75,6 +75,8 @@ func (s *BrowserSkill) Execute(ctx context.Context, args json.RawMessage) (strin
 		return s.open(ctx, params.URL, params.Context)
 	case "scrape":
 		return s.scrape(ctx, params.URL, params.Context)
+	case "scrape_interactive":
+		return s.scrapeInteractive(ctx, params.Context)
 	case "click":
 		if params.Selector == "" {
 			return "", fmt.Errorf("missing selector")
@@ -222,6 +224,21 @@ func (s *BrowserSkill) scrape(ctx context.Context, url string, contextStr string
 	}
 
 	return content, nil
+}
+
+func (s *BrowserSkill) scrapeInteractive(ctx context.Context, contextStr string) (string, error) {
+	bc := connect.GetBrowserChannel()
+	if bc == nil || !bc.IsActive() {
+		return "", fmt.Errorf("no browser extension connected")
+	}
+	targetInstance := ""
+	if contextStr != "" {
+		client := bc.FindClientByTab(contextStr)
+		if client != nil {
+			targetInstance = client.InstanceID
+		}
+	}
+	return bc.Request(ctx, targetInstance, "scrape:interactive")
 }
 
 func (s *BrowserSkill) click(ctx context.Context, selector string, contextStr string) (string, error) {
