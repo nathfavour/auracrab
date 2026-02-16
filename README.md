@@ -83,7 +83,12 @@ Direct integration with <code>vibeauracle</code> for high-fidelity intelligence 
 
 ### Installation
 
-**Via Shell (Recommended):**
+**Via anyisland (Fastest):**
+```bash
+anyisland install nathfavour/auracrab
+```
+
+**Via Shell:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/main/install.sh | bash
 ```
@@ -91,6 +96,13 @@ curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/main/install.sh 
 **Via Go:**
 ```bash
 go install github.com/nathfavour/auracrab/cmd/auracrab@latest
+```
+
+**Build from Source:**
+```bash
+git clone https://github.com/nathfavour/auracrab.git
+cd auracrab
+make build
 ```
 
 ### Quick Commands
