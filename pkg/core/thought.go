@@ -1,10 +1,14 @@
 package core
 
 import (
+	"context"
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/nathfavour/auracrab/pkg/biology"
+	"github.com/nathfavour/auracrab/pkg/skills"
 )
 
 // ThoughtSignature represents a distilled state of a multi-pulse goal.
@@ -17,6 +21,9 @@ type ThoughtSignature struct {
 }
 
 func (ts *ThoughtSignature) String() string {
+	if ts == nil {
+		return "SIGNATURE: (New metabolic goal initialized)"
+	}
 	return fmt.Sprintf(
 		"PULSE_SIGNATURE [#%d]:\nGoal: %s\nLast Progress: %s\nRemaining Steps: %v\nAnomalies: %v",
 		ts.PulseCount, ts.Goal, ts.LastResult, ts.RemainingSteps, ts.Anomalies,
@@ -56,9 +63,13 @@ func (m *Metabolizer) Build(
 	contextDNA := m.metabolizeFovea(fovea)
 
 	// 4. Temporal Pulse Framing
+	pulseCount := 0
+	if signature != nil {
+		pulseCount = signature.PulseCount
+	}
 	pulseFrame := fmt.Sprintf(
 		"CURRENT_PULSE: #%d (Metabolic Rate: %.2fHz)\nENERGY: %.2f/1.00 (Burned: %.3f)\n",
-		signature.PulseCount+1, 1.0, bio.EnergyLevel, burn,
+		pulseCount+1, 1.0, bio.EnergyLevel, burn,
 	)
 
 	return fmt.Sprintf(
@@ -86,22 +97,67 @@ func (m *Metabolizer) Build(
 }
 
 func (m *Metabolizer) metabolizeSkills(active []string) string {
-	registry := m.butler.registry // Or specialized skill registry
-	// For now using the global registry
-	allSkills := []string{}
-	// Fallback to all if none specified
+	reg := skills.GetRegistry()
+	var expressed []string
+
 	if len(active) == 0 {
-		return "(No specific skills expressed. Use core logic.)"
+		return "ACTIVE_DNA: (General reasoning, no specialized skills expressed)"
 	}
 
 	for _, name := range active {
-		// In a real implementation, we'd pull from the actual skill registry
-		allSkills = append(allSkills, fmt.Sprintf("- skill: %s (expressed)", name))
+		if s, ok := reg.Get(name); ok {
+			expressed = append(expressed, fmt.Sprintf("- %s: %s\n  manifest: %s", s.Name(), s.Description(), string(s.Manifest())))
+		}
 	}
-	return "ACTIVE_DNA:\n" + fmt.Join(allSkills, "\n")
+
+	return "ACTIVE_DNA:\n" + strings.Join(expressed, "\n")
 }
 
 func (m *Metabolizer) metabolizeFovea(fovea *Fovea) string {
-	// Detailed content of foveated files
-	return fmt.Sprintf("FOCUS_FILES: %v (Detailed in next pulse if needed)", fovea.Files)
+	if fovea == nil || len(fovea.Files) == 0 {
+		return "FOVEA: (General context, no specific file focus)"
+	}
+	// In a real implementation, we'd read_file for each and include content
+	return fmt.Sprintf("FOCUS_FILES: %v", fovea.Files)
+}
+
+// ReflexCell generates autonomous reflections and actions.
+type ReflexCell struct {
+	butler      *Butler
+	lastThought time.Time
+}
+
+func NewReflexCell(b *Butler) *ReflexCell {
+	return &ReflexCell{
+		butler: b,
+	}
+}
+
+func (rc *ReflexCell) Name() string {
+	return "ReflexGenerator"
+}
+
+func (rc *ReflexCell) Pulse(ctx context.Context) error {
+	energy, _ := biology.CheckThermodynamics()
+	if energy.EnergyLevel < 0.6 {
+		return nil
+	}
+
+	interval := time.Duration(10+rand.Intn(20)) * time.Minute
+	if time.Since(rc.lastThought) < interval {
+		return nil
+	}
+
+	rc.lastThought = time.Now()
+	go rc.reflect(ctx)
+	return nil
+}
+
+func (rc *ReflexCell) reflect(ctx context.Context) {
+	prompt := "SYSTEM_REFLEX: You are idling. Generate a brief, punchy autonomous reflection on your current environment. Keep it under 140 characters."
+	thought, err := rc.butler.QueryWithContext(ctx, prompt, "vibe")
+	if err != nil {
+		return
+	}
+	fmt.Printf("REFLEX: %s\n", thought)
 }

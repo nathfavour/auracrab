@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,7 @@ type PulseTask struct {
 	Platform  string
 	ChatID    string
 	CreatedAt time.Time
+	Signature *ThoughtSignature
 }
 
 type NervousSystem struct {
@@ -66,6 +68,7 @@ func (ns *NervousSystem) Plan(platform, chatID, goal string) *PulseTask {
 		ChatID:    chatID,
 		CreatedAt: time.Now(),
 		Steps:     []*PulseStep{},
+		Signature: &ThoughtSignature{Goal: goal},
 	}
 	ns.tasks[taskID] = task
 	return task
@@ -102,18 +105,23 @@ func (ns *NervousSystem) Pulse(ctx context.Context) error {
 func (ns *NervousSystem) initialPlanning(ctx context.Context, task *PulseTask) {
 	prompt := fmt.Sprintf("TASK_PLANNING: Goal: '%s'. Break this into 2-5 atomic, executable steps. Return a simple bulleted list of descriptions.", task.Goal)
 	
-	// Fast thinking
-	res, err := ns.butler.QueryWithContext(ctx, prompt, "plan")
+	// Use metabolic query for planning
+	res, err := ns.butler.QueryMetabolic(ctx, prompt, "plan", task.Signature, &Fovea{ActiveSkills: []string{"system"}})
 	if err != nil {
 		return
 	}
 
-	// Simple parser for bullet points
+	// Improved parser for bullet points
 	lines := []string{}
-	for _, line := range append([]string{}, res) {
-		if line != "" {
-			lines = append(lines, line)
+	for _, line := range strings.Split(res, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
+		// Remove common bullet prefixes
+		line = strings.TrimPrefix(line, "- ")
+		line = strings.TrimPrefix(line, "* ")
+		lines = append(lines, line)
 	}
 
 	ns.mu.Lock()
@@ -124,6 +132,7 @@ func (ns *NervousSystem) initialPlanning(ctx context.Context, task *PulseTask) {
 			Status:      StepPending,
 		})
 	}
+	task.Signature.RemainingSteps = lines
 	ns.mu.Unlock()
 
 	ns.butler.sendUpdate(task.Platform, task.ChatID, fmt.Sprintf("🧬 Pulse Plan for '%s' initialized with %d stages.", task.Goal, len(task.Steps)))
@@ -136,20 +145,31 @@ func (ns *NervousSystem) executeStep(ctx context.Context, task *PulseTask, step 
 
 	biology.GetMetabolism().Burn(biology.CostComputeLow)
 
-	// In a real implementation, the 'Action' would be a dynamic call.
-	// For now, we use the Brain to execute the specific step description.
+	// Foveated Sensing: Only activate skills relevant to the task if possible.
+	fovea := &Fovea{
+		ActiveSkills: []string{"system", "browser"},
+	}
+
 	prompt := fmt.Sprintf("TASK_EXECUTION: Goal: '%s'. Current Step: '%s'. Perform this step and return the result.", task.Goal, step.Description)
 	
-	res, err := ns.butler.QueryWithContext(ctx, prompt, "agent")
+	res, err := ns.butler.QueryMetabolic(ctx, prompt, "agent", task.Signature, fovea)
 	
 	ns.mu.Lock()
+	task.Signature.PulseCount++
 	if err != nil {
 		step.Status = StepFailed
 		step.Result = err.Error()
+		task.Signature.Anomalies = append(task.Signature.Anomalies, err.Error())
 	} else {
 		step.Status = StepCompleted
 		step.Result = res
+		task.Signature.LastResult = res
 		task.Current++
+		if task.Current < len(task.Steps) {
+			task.Signature.RemainingSteps = task.Signature.RemainingSteps[1:]
+		} else {
+			task.Signature.RemainingSteps = nil
+		}
 	}
 	isDone := task.Current >= len(task.Steps)
 	ns.mu.Unlock()

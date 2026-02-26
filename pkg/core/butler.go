@@ -78,6 +78,7 @@ type Butler struct {
 	channels  map[string]connect.Channel
 	Spine     *spine.Spine
 	Nervous   *NervousSystem
+	Metabolizer *Metabolizer
 
 	highQueue   chan QueuedMessage
 	normalQueue chan QueuedMessage
@@ -120,14 +121,17 @@ func GetButler() *Butler {
 		instance.load()
 		instance.setupCron()
 		
+		// Initialize Metabolizer
+		instance.Metabolizer = NewMetabolizer(instance)
+
 		// Initialize Immune System
 		nodeID := fmt.Sprintf("node-%d", time.Now().UnixNano())
 		imm := immune.NewImmuneSystem(nodeID)
 		_ = imm.Register()
 		instance.Spine.Attach(imm)
 
-		// Initialize Thought Cell
-		instance.Spine.Attach(NewThoughtCell(instance))
+		// Initialize Reflex Cell
+		instance.Spine.Attach(NewReflexCell(instance))
 
 		// Initialize Nervous System (Task Orchestration)
 		ns := NewNervousSystem(instance)
@@ -247,6 +251,15 @@ func (b *Butler) setupCron() {
 	// Memory sync or cleanup can happen here
 }
 
+func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent string, signature *ThoughtSignature, fovea *Fovea) (string, error) {
+	fullPrompt := b.Metabolizer.Build(prompt, signature, fovea)
+
+	biology.GetMetabolism().Burn(biology.CostAPIQuery)
+
+	client := vibe.NewClient()
+	return client.Query(fullPrompt, intent)
+}
+
 func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (string, error) {
 	if intent == "" {
 		intent = "vibe"
@@ -259,24 +272,8 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 		return res, nil
 	}
 
-	fullPrompt := b.buildPrompt(prompt, "")
-
-	// Burn energy for the query
-	biology.GetMetabolism().Burn(biology.CostAPIQuery)
-
-	client := vibe.NewClient()
-	reply, err := client.Query(fullPrompt, intent)
-	if err != nil {
-		// Fallback to HeuristicSynthesizer if vibeauracle is offline
-		fmt.Printf("Vibeauracle error, using heuristic fallback: %v\n", err)
-		heuristic := vibe.NewHeuristicSynthesizer()
-		return heuristic.Synthesize(prompt), nil
-	}
-	reply = strings.TrimSpace(reply)
-	if reply == "" {
-		return "", fmt.Errorf("empty response from vibeauracle")
-	}
-	return reply, nil
+	// Use empty signature and general fovea for generic queries
+	return b.QueryMetabolic(ctx, prompt, intent, nil, nil)
 }
 
 func (b *Butler) TryDeterministic(prompt string) (string, bool) {
