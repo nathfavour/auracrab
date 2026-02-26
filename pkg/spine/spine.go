@@ -31,18 +31,27 @@ func (s *Spine) Attach(cell Cell) {
 	s.cells = append(s.cells, cell)
 }
 
-// Breathes starts the heartbeat loop.
+// Breathes starts the heartbeat loop with adaptive rate.
 func (s *Spine) Breathes(ctx context.Context) {
-	fmt.Printf("SPINE: Starting pulse at rate %v\n", s.rate)
-	ticker := time.NewTicker(s.rate)
-	defer ticker.Stop()
-
+	fmt.Printf("SPINE: Starting pulse. Initial rate %v\n", s.rate)
+	
 	for {
+		// Calculate current metabolic rate
+		energy, _ := biology.CheckThermodynamics()
+		currentRate := s.rate
+
+		// Adaptive logic: Slow down if energy is low
+		if energy.EnergyLevel < 0.2 {
+			currentRate = s.rate * 10 // Slow to 0.1Hz
+		} else if energy.EnergyLevel < 0.5 {
+			currentRate = s.rate * 2 // Slow to 0.5Hz
+		}
+
 		select {
 		case <-ctx.Done():
 			fmt.Println("SPINE: Context cancelled, stopping pulse.")
 			return
-		case <-ticker.C:
+		case <-time.After(currentRate):
 			s.pulse(ctx)
 		}
 	}

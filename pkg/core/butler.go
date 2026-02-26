@@ -252,6 +252,13 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 		intent = "vibe"
 	}
 
+	// TIER 0: Deterministic Heuristic Gate (Minimizing Energy)
+	if res, ok := b.TryDeterministic(prompt); ok {
+		fmt.Printf("Butler: Tier 0 (Deterministic) hit! Energy Saved.\n")
+		biology.GetMetabolism().Burn(biology.CostComputeLow)
+		return res, nil
+	}
+
 	fullPrompt := b.buildPrompt(prompt, "")
 
 	// Burn energy for the query
@@ -270,6 +277,33 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 		return "", fmt.Errorf("empty response from vibeauracle")
 	}
 	return reply, nil
+}
+
+func (b *Butler) TryDeterministic(prompt string) (string, bool) {
+	lower := strings.ToLower(strings.TrimSpace(prompt))
+
+	// Level 0.1: Math Heuristic
+	if strings.HasPrefix(lower, "calculate ") {
+		expr := strings.TrimPrefix(lower, "calculate ")
+		// Use bc for math if available
+		cmd := exec.Command("bc", "-l")
+		cmd.Stdin = strings.NewReader(expr + "\n")
+		out, err := cmd.Output()
+		if err == nil {
+			return strings.TrimSpace(string(out)), true
+		}
+	}
+
+	// Level 0.2: File System Heuristic
+	if lower == "list files" || lower == "ls" {
+		files, _ := filepath.Glob("*")
+		if len(files) == 0 {
+			return "No files found in current directory.", true
+		}
+		return "Files: " + strings.Join(files, ", "), true
+	}
+
+	return "", false
 }
 
 func (b *Butler) buildPrompt(userMessage string, historyText string) string {
