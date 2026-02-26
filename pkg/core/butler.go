@@ -717,7 +717,7 @@ func (b *Butler) WatchHealth() string {
 	if errCount == 0 {
 		return "System Health: Excellent."
 	}
-	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura doctor'.", errCount)
+	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura check'.", errCount)
 }
 
 func (b *Butler) restartVibeaura() {
