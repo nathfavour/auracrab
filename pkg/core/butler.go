@@ -722,20 +722,20 @@ func (b *Butler) WatchHealth() string {
 
 func (b *Butler) restartVibeaura() {
 	fmt.Println("Butler: Restarting vibeaura daemon...")
-	// Try to stop it first just in case
-	_ = exec.Command("vibeaura", "stop").Run()
-	time.Sleep(1 * time.Second)
+	// Use the dedicated restart command if available, or daemon start
+	_ = exec.Command("vibeaura", "restart").Run()
+	time.Sleep(2 * time.Second)
 
-	// Start it
-	cmd := exec.Command("vibeaura", "start")
+	// Ensure it's started
+	cmd := exec.Command("vibeaura", "daemon", "start")
 	err := cmd.Start()
 	if err != nil {
 		fmt.Printf("Butler: Failed to restart vibeaura: %v\n", err)
 		return
 	}
 
-	// Wait a bit for it to initialize
-	time.Sleep(3 * time.Second)
+	// Wait a bit for it to initialize and create the socket
+	time.Sleep(5 * time.Second)
 	fmt.Println("Butler: Vibeaura restart attempt completed.")
 }
 
