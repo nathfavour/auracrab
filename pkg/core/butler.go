@@ -18,7 +18,9 @@ import (
 	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/mission"
+	"github.com/nathfavour/auracrab/pkg/notary"
 	"github.com/nathfavour/auracrab/pkg/social"
+	"github.com/nathfavour/auracrab/pkg/vault"
 	"github.com/nathfavour/auracrab/pkg/vibe"
 )
 
@@ -475,6 +477,38 @@ func (b *Butler) updateStatus(id string, status TaskStatus, result string) {
 	}
 	b.mu.Unlock()
 	b.save()
+
+	// On-chain Notarization Hook
+	if status == TaskStatusCompleted {
+		go func(taskID, taskResult string) {
+			v := vault.GetVault()
+			key, err := v.Get("NOTARY_PRIVATE_KEY")
+			if err != nil || key == "" {
+				return // Notary not configured
+			}
+
+			// Use a shorter summary if the result is too long
+			summary := taskResult
+			if len(summary) > 200 {
+				summary = summary[:200] + "..."
+			}
+
+			logData := fmt.Sprintf("TASK_COMPLETED ID=%s RESULT=%s", taskID, summary)
+			txHash, err := notary.NotarizeActivity(key, logData)
+			if err != nil {
+				fmt.Printf("Notary Error: %v\n", err)
+				return
+			}
+			fmt.Printf("Notary: Proof submitted. TX Hash: %s\n", txHash)
+
+			b.mu.Lock()
+			if t, ok := b.tasks[taskID]; ok {
+				t.Logs = append(t.Logs, fmt.Sprintf("[ON-CHAIN PROOF] tx:%s", txHash))
+			}
+			b.mu.Unlock()
+			b.save()
+		}(id, result)
+	}
 }
 
 func (b *Butler) GetStatus() string {
