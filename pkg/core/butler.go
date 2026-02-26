@@ -125,6 +125,10 @@ func GetButler() *Butler {
 		// Initialize Thought Cell
 		instance.Spine.Attach(NewThoughtCell(instance))
 
+		// Initialize Nervous System (Task Orchestration)
+		ns := NewNervousSystem(instance)
+		instance.Spine.Attach(ns)
+
 		instance.Spine.Attach(instance)
 	})
 	return instance
@@ -220,6 +224,9 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 
 	fullPrompt := b.buildPrompt(prompt, "")
 
+	// Burn energy for the query
+	biology.GetMetabolism().Burn(biology.CostAPIQuery)
+
 	client := vibe.NewClient()
 	reply, err := client.Query(fullPrompt, intent)
 	if err != nil {
@@ -251,10 +258,21 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 		browserStatus = "CONNECTED (ready for automation)"
 	}
 
+	// Proprioception: Gather Internal Bio-Stats
+	bioStats, _ := biology.CheckThermodynamics()
+	metabolism := biology.GetMetabolism()
+	totalBurn, _ := metabolism.GetStats()
+
 	prompt := fmt.Sprintf(
 		"AURACRAB_SYSTEM_CONTEXT\n"+
 			"WORKING_DIRECTORY: %s\n"+
 			"PROJECT_FILES_SNAPSHOT:\n%s\n\n"+
+			"SYSTEM_BIOLOGY:\n"+
+			"- ENERGY_LEVEL: %.2f/1.00\n"+
+			"- CPU_USAGE: %.1f%%\n"+
+			"- MEMORY_USAGE: %.1f%%\n"+
+			"- METABOLIC_BURN: %.3f units\n"+
+			"- THERMODYNAMIC_LIMIT: 0.15 (Conserve energy below this)\n\n"+
 			"BROWSER_TOOL_STATUS: %s\n"+
 			"BROWSER_CAPABILITIES:\n"+
 			"- action: 'browser', ... (Atomic actions: open, scrape, click, type, hover, wait, screenshot)\n"+
@@ -270,9 +288,13 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 			"OUTPUT_RULES:\n"+
 			"- Return the final actionable answer only.\n"+
 			"- Do not include chain-of-thought or hidden reasoning.\n"+
-			"- Be concrete, execution-oriented, and directly useful.",
+			"- Be concrete, execution-oriented, and directly useful. Optimize for energy efficiency.",
 		cwd,
 		dirSnapshot,
+		bioStats.EnergyLevel,
+		bioStats.CPUUsage,
+		bioStats.MemoryUsage,
+		totalBurn,
 		browserStatus,
 		historyText,
 		userMessage,
