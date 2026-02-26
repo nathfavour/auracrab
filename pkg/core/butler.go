@@ -11,15 +11,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nathfavour/auracrab/pkg/biology"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/connect"
 	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/cron"
 	"github.com/nathfavour/auracrab/pkg/ego"
+	"github.com/nathfavour/auracrab/pkg/immune"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/mission"
 	"github.com/nathfavour/auracrab/pkg/notary"
 	"github.com/nathfavour/auracrab/pkg/social"
+	"github.com/nathfavour/auracrab/pkg/spine"
 	"github.com/nathfavour/auracrab/pkg/vault"
 	"github.com/nathfavour/auracrab/pkg/vibe"
 )
@@ -73,6 +76,7 @@ type Butler struct {
 	Missions  *mission.Manager
 	Ego       *ego.Ego
 	channels  map[string]connect.Channel
+	Spine     *spine.Spine
 
 	highQueue   chan QueuedMessage
 	normalQueue chan QueuedMessage
@@ -104,12 +108,21 @@ func GetButler() *Butler {
 			Missions:    miss,
 			Ego:         eg,
 			channels:    make(map[string]connect.Channel),
+			Spine:       spine.NewSpine(1 * time.Second), // 1Hz Heartbeat
 			highQueue:   make(chan QueuedMessage, 50),
 			normalQueue: make(chan QueuedMessage, 100),
 			lowQueue:    make(chan QueuedMessage, 100),
 		}
 		instance.load()
 		instance.setupCron()
+		
+		// Initialize Immune System
+		nodeID := fmt.Sprintf("node-%d", time.Now().UnixNano())
+		imm := immune.NewImmuneSystem(nodeID)
+		_ = imm.Register()
+		instance.Spine.Attach(imm)
+
+		instance.Spine.Attach(instance)
 	})
 	return instance
 }
@@ -122,6 +135,9 @@ func (b *Butler) Serve(ctx context.Context) error {
 	}
 	b.running = true
 	b.mu.Unlock()
+
+	// Start Spine (The Heartbeat)
+	go b.Spine.Breathes(ctx)
 
 	// Start integrations
 	chans := connect.GetChannels()
@@ -160,6 +176,28 @@ func (b *Butler) Serve(ctx context.Context) error {
 	b.mu.Lock()
 	b.running = false
 	b.mu.Unlock()
+	return nil
+}
+
+// Name implements spine.Cell
+func (b *Butler) Name() string {
+	return "ButlerCore"
+}
+
+// Pulse implements spine.Cell
+func (b *Butler) Pulse(ctx context.Context) error {
+	// Biological self-maintenance
+	if biology.ShouldApoptose() {
+		biology.Apoptosis("Energy levels critically low - terminal metabolic failure")
+	}
+
+	// Check if we should clone ourselves if underutilized (The Swarm Principle)
+	// For now, just log the capability
+	if biology.CanClone() && len(b.tasks) > 5 {
+		// If we have many tasks and plenty of energy, we could clone.
+		// fmt.Println("Butler: High load but high energy. Potential for cloning detected.")
+	}
+
 	return nil
 }
 
