@@ -57,7 +57,11 @@ func (m *Metabolizer) Build(
 	burn, _ := met.GetStats()
 
 	// 2. Skill Sharding (DNA Expression)
-	skillDNA := m.metabolizeSkills(fovea.ActiveSkills)
+	var activeSkills []string
+	if fovea != nil {
+		activeSkills = fovea.ActiveSkills
+	}
+	skillDNA := m.metabolizeSkills(activeSkills)
 
 	// 3. Foveated Sensing (Focus Area)
 	contextDNA := m.metabolizeFovea(fovea)
