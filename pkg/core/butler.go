@@ -77,10 +77,13 @@ type Butler struct {
 	Ego       *ego.Ego
 	channels  map[string]connect.Channel
 	Spine     *spine.Spine
+	Nervous   *NervousSystem
 
 	highQueue   chan QueuedMessage
 	normalQueue chan QueuedMessage
 	lowQueue    chan QueuedMessage
+
+	lazyBuffer  map[string][]string // platform:chatID -> messages
 }
 
 var (
@@ -112,6 +115,7 @@ func GetButler() *Butler {
 			highQueue:   make(chan QueuedMessage, 50),
 			normalQueue: make(chan QueuedMessage, 100),
 			lowQueue:    make(chan QueuedMessage, 100),
+			lazyBuffer:  make(map[string][]string),
 		}
 		instance.load()
 		instance.setupCron()
@@ -127,6 +131,7 @@ func GetButler() *Butler {
 
 		// Initialize Nervous System (Task Orchestration)
 		ns := NewNervousSystem(instance)
+		instance.Nervous = ns
 		instance.Spine.Attach(ns)
 
 		instance.Spine.Attach(instance)
@@ -411,18 +416,24 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 		if strings.HasPrefix(lowerText, "create") || strings.HasPrefix(lowerText, "update") ||
 			strings.HasPrefix(lowerText, "delete") || strings.HasPrefix(lowerText, "list") ||
 			strings.Contains(lowerText, "task") || strings.Contains(lowerText, "run") {
-			intent = "crud"
+			intent = "agent" // Map CRUD/Task intents to 'agent'
 		}
 
-		promptWithContext := b.buildPrompt(msg.Text, historyText)
-
-		client := vibe.NewClient()
-		// Reverting to synchronous Query for better reliability as streaming isn't documented for UDS
-		res, err := client.Query(promptWithContext, intent)
-		if err != nil {
-			reply = fmt.Sprintf("Error from vibeauracle: %v", err)
+		// DELEGATION: If the intent is agentic, hand over to the Nervous System
+		if intent == "plan" || intent == "agent" {
+			b.Nervous.Plan(msg.Platform, msg.ChatID, msg.Text)
+			reply = "Acknowledged. I am breaking this down and attaching it to my Nervous System for execution."
 		} else {
-			reply = res
+			promptWithContext := b.buildPrompt(msg.Text, historyText)
+
+			client := vibe.NewClient()
+			// Reverting to synchronous Query for better reliability as streaming isn't documented for UDS
+			res, err := client.Query(promptWithContext, intent)
+			if err != nil {
+				reply = fmt.Sprintf("Error from vibeauracle: %v", err)
+			} else {
+				reply = res
+			}
 		}
 
 		if reply == "" {
@@ -440,6 +451,18 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 }
 
 func (b *Butler) sendUpdate(platform, chatID, text string) {
+	b.sendUpdateExt(platform, chatID, text, false)
+}
+
+func (b *Butler) sendUpdateExt(platform, chatID, text string, lazy bool) {
+	if lazy {
+		b.mu.Lock()
+		key := fmt.Sprintf("%s:%s", platform, chatID)
+		b.lazyBuffer[key] = append(b.lazyBuffer[key], text)
+		b.mu.Unlock()
+		return
+	}
+
 	b.mu.RLock()
 	ch, ok := b.channels[platform]
 	b.mu.RUnlock()
