@@ -204,13 +204,38 @@ func (b *Butler) Pulse(ctx context.Context) error {
 	}
 
 	// Check if we should clone ourselves if underutilized (The Swarm Principle)
-	// For now, just log the capability
 	if biology.CanClone() && len(b.tasks) > 5 {
-		// If we have many tasks and plenty of energy, we could clone.
-		// fmt.Println("Butler: High load but high energy. Potential for cloning detected.")
+		// Potential for cloning detected.
 	}
 
+	b.flushLazyIO()
+
 	return nil
+}
+
+func (b *Butler) flushLazyIO() {
+	b.mu.Lock()
+	if len(b.lazyBuffer) == 0 {
+		b.mu.Unlock()
+		return
+	}
+
+	// Copy and clear buffer
+	currentBuffer := b.lazyBuffer
+	b.lazyBuffer = make(map[string][]string)
+	b.mu.Unlock()
+
+	for key, msgs := range currentBuffer {
+		parts := strings.Split(key, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		platform, chatID := parts[0], parts[1]
+		
+		// Batch messages with "..." separator
+		batched := strings.Join(msgs, "\n...\n")
+		b.sendUpdateExt(platform, chatID, "⏳ [Lazy I/O Pulse]\n"+batched, false)
+	}
 }
 
 func (b *Butler) setupCron() {

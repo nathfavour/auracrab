@@ -155,9 +155,11 @@ func (ns *NervousSystem) executeStep(ctx context.Context, task *PulseTask, step 
 	ns.mu.Unlock()
 
 	// "Lazy I/O" Progress update
-	update := fmt.Sprintf("⚡ Step Complete: %s", step.Description)
 	if isDone {
-		update = fmt.Sprintf("✅ Goal Reached: %s\n\nFinal Outcome: %s", task.Goal, res)
+		update := fmt.Sprintf("✅ Goal Reached: %s\n\nFinal Outcome: %s", task.Goal, res)
+		ns.butler.sendUpdateExt(task.Platform, task.ChatID, update, false) // Fast I/O for completion
+	} else {
+		update := fmt.Sprintf("⚡ Step Complete: %s", step.Description)
+		ns.butler.sendUpdateExt(task.Platform, task.ChatID, update, true) // Lazy I/O for progress
 	}
-	ns.butler.sendUpdate(task.Platform, task.ChatID, update)
 }
