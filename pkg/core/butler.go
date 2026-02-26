@@ -122,6 +122,9 @@ func GetButler() *Butler {
 		_ = imm.Register()
 		instance.Spine.Attach(imm)
 
+		// Initialize Thought Cell
+		instance.Spine.Attach(NewThoughtCell(instance))
+
 		instance.Spine.Attach(instance)
 	})
 	return instance
