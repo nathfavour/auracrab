@@ -294,6 +294,7 @@ func (b *Butler) setupCron() {
 }
 
 func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent string, signature *ThoughtSignature, fovea *Fovea) (provider.CompletionResponse, error) {
+	start := time.Now()
 	fullPrompt := b.Metabolizer.Build(prompt, signature, fovea)
 
 	biology.GetMetabolism().Burn(biology.CostAPIQuery)
@@ -303,7 +304,31 @@ func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent strin
 		Intent:  intent,
 	}
 
-	return b.Provider.GetCompletion(ctx, req)
+	resp, err := b.Provider.GetCompletion(ctx, req)
+	latency := time.Since(start)
+
+	b.BroadcastInference(resp, latency, err)
+
+	return resp, err
+}
+
+func (b *Butler) BroadcastInference(resp provider.CompletionResponse, latency time.Duration, err error) {
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+
+	b.Spine.Broadcast(spine.Event{
+		Type: "inference",
+		Payload: map[string]interface{}{
+			"provider": b.Provider.Name(),
+			"status":   status,
+			"latency":  latency.String(),
+			"miner":    resp.MinerID,
+			"proof":    resp.Proof != "",
+			"error":    err,
+		},
+	})
 }
 
 func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (provider.CompletionResponse, error) {

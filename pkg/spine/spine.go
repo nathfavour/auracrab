@@ -15,18 +15,30 @@ type Cell interface {
 	Name() string
 }
 
+type Event struct {
+	Type      string
+	Payload   interface{}
+	Timestamp time.Time
+}
+
+type EventHandler interface {
+	Handle(e Event)
+}
+
 // Spine is the central nervous system pulse.
 type Spine struct {
-	mu     sync.RWMutex
-	cells  []Cell
-	rate   time.Duration
-	energy biology.Energy
+	mu       sync.RWMutex
+	cells    []Cell
+	handlers []EventHandler
+	rate     time.Duration
+	energy   biology.Energy
 }
 
 func NewSpine(rate time.Duration) *Spine {
 	s := &Spine{
-		cells: []Cell{},
-		rate:  rate,
+		cells:    []Cell{},
+		handlers: []EventHandler{},
+		rate:     rate,
 	}
 	// Initial energy check
 	s.energy, _ = biology.CheckThermodynamics()
@@ -36,7 +48,30 @@ func NewSpine(rate time.Duration) *Spine {
 }
 
 func (s *Spine) Attach(cell Cell) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.cells = append(s.cells, cell)
+}
+
+func (s *Spine) RegisterHandler(h EventHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.handlers = append(s.handlers, h)
+}
+
+func (s *Spine) Broadcast(e Event) {
+	s.mu.RLock()
+	handlers := make([]EventHandler, len(s.handlers))
+	copy(handlers, s.handlers)
+	s.mu.RUnlock()
+
+	if e.Timestamp.IsZero() {
+		e.Timestamp = time.Now()
+	}
+
+	for _, h := range handlers {
+		go h.Handle(e)
+	}
 }
 
 // sense periodically updates the spine's awareness of its physical state.

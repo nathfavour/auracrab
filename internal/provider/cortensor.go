@@ -102,9 +102,10 @@ func (p *CortensorProvider) majorityVote(resps []*cortensor.RouterCompletionResp
 }
 
 func (p *CortensorProvider) VerifyProof(ctx context.Context, proof string) (bool, error) {
-	// Implementation for Phase 4: Cryptographic verification
-	// For now, we assume it's valid if present
-	return proof != "", nil
+	if proof == "" {
+		return false, nil
+	}
+	return p.client.Verify(ctx, proof)
 }
 
 func (p *CortensorProvider) ManageSession(ctx context.Context) error {
