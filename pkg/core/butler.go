@@ -120,8 +120,35 @@ func GetButler() *Butler {
 			normalQueue: make(chan QueuedMessage, 100),
 			lowQueue:    make(chan QueuedMessage, 100),
 			lazyBuffer:  make(map[string][]string),
-			Provider:    provider.NewVibeProvider(),
 		}
+
+		// Initialize Inference Provider from Config
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			fmt.Printf("Butler: Error loading config: %v. Falling back to default provider.\n", err)
+			instance.Provider = provider.NewVibeProvider()
+		} else {
+			vibe := provider.NewVibeProvider()
+			if cfg.Inference.ActiveProvider == "cortensor" {
+				cort := provider.NewCortensorProvider(
+					cfg.Inference.Cortensor.RouterEndpoint,
+					cfg.Inference.Cortensor.SessionID,
+					vibe,
+				)
+				// Initial handshake in background to not block startup
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := cort.ManageSession(ctx); err != nil {
+						fmt.Printf("Butler: Cortensor session handshake failed: %v. Fallback active.\n", err)
+					}
+				}()
+				instance.Provider = cort
+			} else {
+				instance.Provider = vibe
+			}
+		}
+
 		instance.load()
 		instance.setupCron()
 		
