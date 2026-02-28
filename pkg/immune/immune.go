@@ -144,5 +144,46 @@ func (is *ImmuneSystem) Name() string {
 
 // Pulse implements spine.Cell
 func (is *ImmuneSystem) Pulse(ctx context.Context) error {
-	return is.Ping(ctx)
+	// 1. Regular Ping and Surveillance
+	if err := is.Ping(ctx); err != nil {
+		return err
+	}
+
+	// 2. Automated Apoptosis (Systemic Cleanup)
+	// Triggered if the node is healthy and idle, or periodically.
+	metabolism := biology.GetMetabolism()
+	idleTime := time.Since(metabolism.LastActivity)
+
+	// If idle for more than 2 minutes, perform systemic cleanup
+	if idleTime > 2*time.Minute {
+		is.cleanup()
+	}
+
+	return nil
 }
+
+func (is *ImmuneSystem) cleanup() {
+	fmt.Println("IMMUNE: Initiating systemic cleanup (Automated Apoptosis)...")
+
+	// 1. Cleanup Temp Files
+	tmpDir := filepath.Join(config.DataDir(), "tmp")
+	_ = os.RemoveAll(tmpDir)
+	_ = os.MkdirAll(tmpDir, 0755)
+
+	// 2. Cleanup Old Logs (if applicable)
+	// Assuming logs are in config.DataDir()/logs
+	logDir := filepath.Join(config.DataDir(), "logs")
+	files, err := os.ReadDir(logDir)
+	if err == nil {
+		for _, f := range files {
+			info, err := f.Info()
+			if err == nil && time.Since(info.ModTime()) > 7*24*time.Hour {
+				_ = os.Remove(filepath.Join(logDir, f.Name()))
+			}
+		}
+	}
+
+	// 3. Cleanup Stale Registry Entries (Already handled by surveillance, but ensuring)
+	is.surveillance()
+}
+

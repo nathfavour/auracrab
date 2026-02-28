@@ -2,13 +2,13 @@
 
 This roadmap tracks the evolution of Auracrab into a self-sustaining, resilient, and autonomous biological entity.
 
-## Current Focus: Phase 4 & 5
+## Current Focus: Phase 5 (The Distributed Swarm)
 Our current objective is to deepen the metabolic resilience of Auracrab and begin the transition to a distributed swarm.
 
 ### Phase 4: Metabolism & Hibernation
-- [ ] **Adaptive Metabolism**: Refine variable heartbeat (Spine rate) logic (1Hz -> 0.1Hz) based on fine-grained energy/activity telemetry.
-- [ ] **Hibernation State**: Implement deep sleep (0.01Hz) triggered by inactivity or specific time-based cycles.
-- [ ] **Automated Apoptosis**: Implement systemic cleanup of "dead cells" (temp files, stale clones, old logs) during idle/hibernation cycles.
+- [x] **Adaptive Metabolism**: Refine variable heartbeat (Spine rate) logic (1Hz -> 0.1Hz) based on fine-grained energy/activity telemetry.
+- [x] **Hibernation State**: Implement deep sleep (0.01Hz) triggered by inactivity or specific time-based cycles.
+- [x] **Automated Apoptosis**: Implement systemic cleanup of "dead cells" (temp files, stale clones, old logs) during idle/hibernation cycles.
 
 ### Phase 5: Swarm Consensus (Distributed Immune System)
 - [ ] **Isolated I/O Band**: Secure, encrypted node-to-node channels for swarm coordination (Moved from Phase 3).
@@ -17,9 +17,9 @@ Our current objective is to deepen the metabolic resilience of Auracrab and begi
 - [ ] **Autonomous Cloning**: Self-replication triggered by high systemic demand and healthy energy reserves.
 
 ### Phase 6: Metabolic Optimization (The Path of Least Resistance)
-- [ ] **Tiered Cognition**: Heuristic gate to solve tasks with local tools (bash/grep) before escalating to expensive AI tokens.
-- [ ] **Semantic Habituation**: Cache successful `PulsePlans` to reuse them for similar future goals without re-planning.
-- [ ] **Foveated Perception**: Dynamically prune context windows to only "see" what is essential for the current atomic step.
+- [x] **Tiered Cognition**: Heuristic gate to solve tasks with local tools (bash/grep) before escalating to expensive AI tokens.
+- [x] **Semantic Habituation**: Cache successful `PulsePlans` to reuse them for similar future goals without re-planning.
+- [x] **Foveated Perception**: Dynamically prune context windows to only "see" what is essential for the current atomic step.
 
 ---
 

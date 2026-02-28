@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -121,8 +122,26 @@ func (m *Metabolizer) metabolizeFovea(fovea *Fovea) string {
 	if fovea == nil || len(fovea.Files) == 0 {
 		return "FOVEA: (General context, no specific file focus)"
 	}
-	// In a real implementation, we'd read_file for each and include content
-	return fmt.Sprintf("FOCUS_FILES: %v", fovea.Files)
+
+	var focusedContent []string
+	for _, path := range fovea.Files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			focusedContent = append(focusedContent, fmt.Sprintf("- %s: (Error reading file: %v)", path, err))
+			continue
+		}
+
+		content := string(data)
+		// Pruning logic: If file is too large (> 2KB), take only first and last 1KB
+		if len(content) > 2048 {
+			pruned := content[:1024] + "\n... [PRUNED FOR METABOLIC EFFICIENCY] ...\n" + content[len(content)-1024:]
+			focusedContent = append(focusedContent, fmt.Sprintf("- %s (PRUNED):\n```\n%s\n```", path, pruned))
+		} else {
+			focusedContent = append(focusedContent, fmt.Sprintf("- %s:\n```\n%s\n```", path, content))
+		}
+	}
+
+	return "FOVEA (HIGH_DETAIL_CONTEXT):\n" + strings.Join(focusedContent, "\n\n")
 }
 
 // ReflexCell generates autonomous reflections and actions.

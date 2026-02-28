@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nathfavour/auracrab/pkg/biology"
+	"github.com/nathfavour/auracrab/pkg/memory"
 )
 
 type StepStatus string
@@ -103,6 +104,23 @@ func (ns *NervousSystem) Pulse(ctx context.Context) error {
 }
 
 func (ns *NervousSystem) initialPlanning(ctx context.Context, task *PulseTask) {
+	// 1. Semantic Habituation: Check for cached plan
+	if cachedSteps, ok := memory.GetHabitStore().Recall(task.Goal); ok {
+		fmt.Printf("NERVOUS: Habitual memory hit for '%s'! Reusing cached plan.\n", task.Goal)
+		ns.mu.Lock()
+		for i, desc := range cachedSteps {
+			task.Steps = append(task.Steps, &PulseStep{
+				ID:          fmt.Sprintf("%s_s%d", task.ID, i),
+				Description: desc,
+				Status:      StepPending,
+			})
+		}
+		task.Signature.RemainingSteps = cachedSteps
+		ns.mu.Unlock()
+		ns.butler.sendUpdate(task.Platform, task.ChatID, fmt.Sprintf("🧠 Habitual memory triggered for '%s'. Pulse Plan recalled from experience.", task.Goal))
+		return
+	}
+
 	prompt := fmt.Sprintf("TASK_PLANNING: Goal: '%s'. Break this into 2-5 atomic, executable steps. Return a simple bulleted list of descriptions.", task.Goal)
 	
 	// Use metabolic query for planning
@@ -176,6 +194,15 @@ func (ns *NervousSystem) executeStep(ctx context.Context, task *PulseTask, step 
 
 	// "Lazy I/O" Progress update
 	if isDone {
+		// Semantic Habituation: Record successful plan
+		ns.mu.RLock()
+		allSteps := []string{}
+		for _, s := range task.Steps {
+			allSteps = append(allSteps, s.Description)
+		}
+		ns.mu.RUnlock()
+		memory.GetHabitStore().Learn(task.Goal, allSteps)
+
 		update := fmt.Sprintf("✅ Goal Reached: %s\n\nFinal Outcome: %s", task.Goal, res)
 		ns.butler.sendUpdateExt(task.Platform, task.ChatID, update, false) // Fast I/O for completion
 	} else {

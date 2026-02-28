@@ -300,6 +300,29 @@ func (b *Butler) TryDeterministic(prompt string) (string, bool) {
 		return "Files: " + strings.Join(files, ", "), true
 	}
 
+	// Level 0.3: Proprioceptive Heuristic
+	switch lower {
+	case "status", "health", "check":
+		return b.GetStatus() + "\n" + b.WatchHealth(), true
+	case "whoami":
+		return "I am Auracrab, a biological autonomous entity.", true
+	case "date", "time":
+		return time.Now().Format(time.RFC1123), true
+	case "disk usage", "df":
+		out, _ := exec.Command("df", "-h", ".").Output()
+		return string(out), true
+	case "memory usage", "free":
+		out, _ := exec.Command("free", "-m").Output()
+		return string(out), true
+	}
+
+	// Level 0.4: Search Heuristic
+	if strings.HasPrefix(lower, "find ") {
+		pattern := strings.TrimPrefix(lower, "find ")
+		out, _ := exec.Command("find", ".", "-name", "*"+pattern+"*", "-maxdepth", "2").Output()
+		return string(out), true
+	}
+
 	return "", false
 }
 
