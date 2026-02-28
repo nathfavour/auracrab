@@ -245,6 +245,16 @@ func (b *Butler) Pulse(ctx context.Context) error {
 
 	b.flushLazyIO()
 
+	// Provider Session Maintenance (e.g., Cortensor heartbeat/refresh)
+	// We do this approximately every 15 minutes (900 pulses at 1Hz)
+	if time.Now().Unix()%900 == 0 {
+		go func() {
+			pCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			_ = b.Provider.ManageSession(pCtx)
+		}()
+	}
+
 	return nil
 }
 

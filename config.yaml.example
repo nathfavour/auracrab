@@ -1,0 +1,16 @@
+# Auracrab Configuration
+# Location: ~/.auracrab/agents/auracrab/config.yaml
+
+inference:
+  # Choose "vibe" (local UDS) or "cortensor" (decentralized)
+  active_provider: "vibe"
+
+  cortensor:
+    # Router node endpoint for the Cortensor network
+    router_endpoint: "https://router.cortensor.io"
+    
+    # Session ID (can use ${ENV_VAR} syntax)
+    session_id: "${CORTENSOR_SESSION_ID}"
+    
+    # Minimum number of miners to verify critical tasks
+    consensus_threshold: 1
