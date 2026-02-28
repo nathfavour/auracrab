@@ -21,6 +21,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/mission"
 	"github.com/nathfavour/auracrab/pkg/notary"
+	"github.com/nathfavour/auracrab/pkg/skills"
 	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/spine"
 	"github.com/nathfavour/auracrab/pkg/vault"
@@ -386,14 +387,26 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 	fmt.Printf("Butler: Built prompt (length: %d)\n", len(prompt))
 	return prompt
 }
-
 func (b *Butler) handleChannelMessage(platform, chatID, from, text string) string {
 	fmt.Printf("Butler: Received message from %s on %s: %s\n", from, platform, text)
-	if text == "get_status_internal" {
+
+	// Internal command routing
+	switch text {
+	case "get_status_internal":
 		return b.GetStatus() + "\n" + b.WatchHealth()
+	case "get_active_tasks_internal":
+		return b.GetActivePulses()
+	case "get_bio_stats_internal":
+		return b.GetBiologicalTelemetry()
+	case "get_swarm_status_internal":
+		return b.GetSwarmConsensus()
+	case "get_skills_internal":
+		return b.GetSkillsSummary()
 	}
 
 	priority := PriorityNormal
+...
+
 	if strings.Contains(strings.ToLower(text), "urgent") || strings.Contains(strings.ToLower(text), "critical") {
 		priority = PriorityHigh
 	}

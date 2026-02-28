@@ -60,14 +60,20 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(platform str
 			case <-ctx.Done():
 				return
 			case update := <-updates:
-				if update.Message == nil {
-					continue
-				}
-
 				// Update offset
 				if update.UpdateID > t.offset {
 					t.offset = update.UpdateID
 					t.saveOffset()
+				}
+
+				// Handle Callback Queries (Buttons)
+				if update.CallbackQuery != nil {
+					t.handleCallback(update.CallbackQuery, onMessage)
+					continue
+				}
+
+				if update.Message == nil {
+					continue
 				}
 
 				from := fmt.Sprintf("@%s", update.Message.From.UserName)
@@ -97,20 +103,12 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(platform str
 						for _, idStr := range strings.Split(allowedChats, ",") {
 							if strings.TrimSpace(idStr) == chatIDStr {
 								isAllowed = true
-								// Persist to DB for faster lookup next time
 								if t.history != nil {
 									_ = t.history.AuthorizeEntity("telegram", chatIDStr)
 								}
 								break
 							}
 						}
-					} else {
-						// If nothing configured at all, we might want to be strict
-						// but for now, let's keep the user's "allowed to message" requirement.
-						// We'll default to false if any TELEGRAM_ALLOWED_CHATS is set,
-						// or true if it's completely fresh (to avoid locking users out immediately).
-						// But with the "no DM first" reminder, let's be more careful.
-						isAllowed = false
 					}
 				}
 
@@ -124,29 +122,26 @@ func (t *TelegramChannel) Start(ctx context.Context, onMessage func(platform str
 						msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Your Chat ID is: %d\nTo allow this chat, run `/config set TELEGRAM_ALLOWED_CHATS %d` in the Auracrab TUI.", chatID, chatID))
 						bot.Send(msg)
 						continue
-					case "/start":
-						msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Telegram Bot*\n\nI am your autonomous agent. I follow a strict 'No DM first' policy. Please authorize this chat in the TUI to continue.\n\nCommands:\n/id - Show Chat ID\n/status - Show daemon status\n/help - Show this help")
-						msg.ParseMode = "Markdown"
-						bot.Send(msg)
+					case "/start", "/menu":
 						if !isAllowed {
-							warn := tgbotapi.NewMessage(chatID, fmt.Sprintf("⚠️ This chat (%d) is not authorized. Your messages will be ignored.", chatID))
-							bot.Send(warn)
+							msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Telegram Bot*\n\nI am your autonomous agent. I follow a strict 'No DM first' policy. Please authorize this chat (%d) in the TUI to continue.")
+							msg.ParseMode = "Markdown"
+							bot.Send(msg)
+							continue
 						}
+						t.MainMenu(chatID)
 						continue
 					case "/status":
 						if !isAllowed {
 							continue
 						}
-						// We need a way to get status. onMessage is usually for tasks.
-						// For now, we can use onMessage with a special prefix or just handle it here if we had access to butler.
-						// But Start only gets onMessage.
-						reply := onMessage("telegram", chatIDStr, from, "get_status_internal") // Hacky way if butler handles it
+						reply := onMessage("telegram", chatIDStr, from, "get_status_internal")
 						msg := tgbotapi.NewMessage(chatID, "📊 *System Status*\n"+reply)
 						msg.ParseMode = "Markdown"
 						bot.Send(msg)
 						continue
 					case "/help":
-						msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Help*\n\n- Send any text to start a new task.\n- Use `@crabname task` to delegate to a specific agent.\n- `/status`: Check daemon health.\n- `/id`: Get this chat's ID.")
+						msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Help*\n\n- Send any text to start a new task.\n- Use `@crabname task` to delegate to a specific agent.\n- `/menu`: Open interactive command center.\n- `/status`: Check daemon health.\n- `/id`: Get this chat's ID.")
 						msg.ParseMode = "Markdown"
 						bot.Send(msg)
 						continue
@@ -269,6 +264,63 @@ func (t *TelegramChannel) TaskMenu(chatID int64) {
 
 	msg.ReplyMarkup = keyboard
 	_, _ = t.bot.Send(msg)
+}
+
+func (t *TelegramChannel) handleCallback(query *tgbotapi.CallbackQuery, onMessage func(string, string, string, string) string) {
+	chatID := query.Message.Chat.ID
+	chatIDStr := fmt.Sprintf("%d", chatID)
+	from := fmt.Sprintf("@%s", query.From.UserName)
+
+	var text string
+	var replyMarkup *tgbotapi.InlineKeyboardMarkup
+
+	switch query.Data {
+	case "main_menu":
+		t.MainMenu(chatID)
+		return
+	case "status_overview":
+		res := onMessage("telegram", chatIDStr, from, "get_status_internal")
+		text = "📊 *System Status*\n" + res
+	case "tasks_menu":
+		t.TaskMenu(chatID)
+		return
+	case "tasks_active":
+		// This needs a special internal command handling in Butler
+		res := onMessage("telegram", chatIDStr, from, "get_active_tasks_internal")
+		text = "🔄 *Active Pulses*\n" + res
+	case "biology_stats":
+		res := onMessage("telegram", chatIDStr, from, "get_bio_stats_internal")
+		text = "🧬 *Biological Telemetry*\n" + res
+	case "swarm_status":
+		res := onMessage("telegram", chatIDStr, from, "get_swarm_status_internal")
+		text = "🕸️ *Swarm Consensus*\n" + res
+	case "skills_list":
+		res := onMessage("telegram", chatIDStr, from, "get_skills_internal")
+		text = "🧠 *Available Skills*\n" + res
+	case "help_main":
+		text = "🦀 *Auracrab Help*\n\nI am an autonomous agent. You can send me tasks in natural language, or use the interactive menu to monitor my biological systems and task progress."
+	}
+
+	if text != "" {
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "Markdown"
+		if replyMarkup != nil {
+			msg.ReplyMarkup = replyMarkup
+		} else {
+			// Add a back button by default for sub-views
+			backKB := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("🔙 Back", "main_menu"),
+				),
+			)
+			msg.ReplyMarkup = backKB
+		}
+		_, _ = t.bot.Send(msg)
+	}
+
+	// Answer the callback to remove the loading state on the button
+	callback := tgbotapi.NewCallback(query.ID, "")
+	_, _ = t.bot.Request(callback)
 }
 
 func (t *TelegramChannel) loadOffset() {
