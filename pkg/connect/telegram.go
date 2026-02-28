@@ -229,6 +229,48 @@ func (t *TelegramChannel) Broadcast(message string) error {
 	return nil
 }
 
+func (t *TelegramChannel) MainMenu(chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "🦀 *Auracrab Command Center*\n\nSelect a system process to monitor or control:")
+	msg.ParseMode = "Markdown"
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📊 Status", "status_overview"),
+			tgbotapi.NewInlineKeyboardButtonData("📋 Tasks", "tasks_menu"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🧬 Biology", "biology_stats"),
+			tgbotapi.NewInlineKeyboardButtonData("🕸️ Swarm", "swarm_status"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🧠 Skills", "skills_list"),
+			tgbotapi.NewInlineKeyboardButtonData("❓ Help", "help_main"),
+		),
+	)
+
+	msg.ReplyMarkup = keyboard
+	_, _ = t.bot.Send(msg)
+}
+
+func (t *TelegramChannel) TaskMenu(chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, "📋 *Task Management*\n\nView active pulses and historical records:")
+	msg.ParseMode = "Markdown"
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔄 Active Pulses", "tasks_active"),
+			tgbotapi.NewInlineKeyboardButtonData("📜 Recent Logs", "tasks_history"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🧹 Clear Finished", "tasks_cleanup"),
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Back", "main_menu"),
+		),
+	)
+
+	msg.ReplyMarkup = keyboard
+	_, _ = t.bot.Send(msg)
+}
+
 func (t *TelegramChannel) loadOffset() {
 	path := filepath.Join(t.stateDir, "offset.json")
 	data, err := os.ReadFile(path)
