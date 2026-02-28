@@ -57,6 +57,11 @@ func CronPath() string {
 	return filepath.Join(DataDir(), "cron.json")
 }
 
+// PIDPath returns the path to the pid file
+func PIDPath() string {
+	return filepath.Join(DataDir(), "auracrab.pid")
+}
+
 // CrabsDir returns the path to the specialized agents directory
 func CrabsDir() string {
 	path := filepath.Join(DataDir(), "crabs")

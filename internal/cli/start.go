@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nathfavour/auracrab/internal/tui"
+	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,21 @@ var StartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the interactive TUI and butler service",
 	Run: func(cmd *cobra.Command, args []string) {
+		pidFile := config.PIDPath()
+
+		// 1. Check if already running
+		if pidData, err := os.ReadFile(pidFile); err == nil {
+			pid, _ := strconv.Atoi(string(pidData))
+			if isProcessRunning(pid) {
+				fmt.Printf("🦀 Auracrab is already running (PID: %d)\n", pid)
+				os.Exit(1)
+			}
+		}
+
+		// Save PID
+		_ = os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0644)
+		defer os.Remove(pidFile)
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -35,7 +52,10 @@ var StartCmd = &cobra.Command{
 		butler := core.GetButler()
 		go func() {
 			if err := butler.Serve(ctx); err != nil {
-				fmt.Printf("Butler service error: %v\n", err)
+				// Don't print error if it's just context cancellation
+				if ctx.Err() == nil {
+					fmt.Printf("Butler service error: %v\n", err)
+				}
 			}
 		}()
 
