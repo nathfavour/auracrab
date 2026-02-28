@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
+	"github.com/nathfavour/auracrab/pkg/vault"
 )
 
 type CortensorConfig struct {
@@ -57,6 +58,14 @@ func LoadConfig() (*Config, error) {
 
 	// Expand environment variables in string fields (e.g., ${CORTENSOR_SESSION_ID})
 	cfg.Inference.Cortensor.SessionID = os.ExpandEnv(cfg.Inference.Cortensor.SessionID)
+
+	// If SessionID is still empty, try to get it from the Vault
+	if cfg.Inference.ActiveProvider == "cortensor" && cfg.Inference.Cortensor.SessionID == "" {
+		v := vault.GetVault()
+		if val, err := v.Get("CORTENSOR_SESSION_ID"); err == nil && val != "" {
+			cfg.Inference.Cortensor.SessionID = val
+		}
+	}
 
 	return &cfg, nil
 }

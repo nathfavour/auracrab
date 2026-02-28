@@ -292,7 +292,7 @@ func (b *Butler) setupCron() {
 	// Memory sync or cleanup can happen here
 }
 
-func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent string, signature *ThoughtSignature, fovea *Fovea) (string, error) {
+func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent string, signature *ThoughtSignature, fovea *Fovea) (provider.CompletionResponse, error) {
 	fullPrompt := b.Metabolizer.Build(prompt, signature, fovea)
 
 	biology.GetMetabolism().Burn(biology.CostAPIQuery)
@@ -302,15 +302,10 @@ func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent strin
 		Intent:  intent,
 	}
 
-	resp, err := b.Provider.GetCompletion(ctx, req)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.Content, nil
+	return b.Provider.GetCompletion(ctx, req)
 }
 
-func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (string, error) {
+func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (provider.CompletionResponse, error) {
 	if intent == "" {
 		intent = "vibe"
 	}
@@ -319,7 +314,7 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 	if res, ok := b.TryDeterministic(prompt); ok {
 		fmt.Printf("Butler: Tier 0 (Deterministic) hit! Energy Saved.\n")
 		biology.GetMetabolism().Burn(biology.CostComputeLow)
-		return res, nil
+		return provider.CompletionResponse{Content: res}, nil
 	}
 
 	// Use empty signature and general fovea for generic queries
@@ -668,14 +663,20 @@ func (b *Butler) executeTask(id, content string, convID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	reply, err := b.QueryWithContext(ctx, content, "vibe")
+	resp, err := b.QueryWithContext(ctx, content, "vibe")
 	if err != nil {
-		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying vibeauracle: %v", err))
+		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying provider: %v", err))
 		return
 	}
 	b.mu.Lock()
 	if t, ok := b.tasks[id]; ok {
-		t.Logs = append(t.Logs, reply)
+		t.Logs = append(t.Logs, resp.Content)
+		if resp.MinerID != "" {
+			t.Logs = append(t.Logs, fmt.Sprintf("[MINER] %s", resp.MinerID))
+		}
+		if resp.Proof != "" {
+			t.Logs = append(t.Logs, fmt.Sprintf("[PROOF] hash:%s", resp.Proof))
+		}
 	}
 	b.mu.Unlock()
 	b.updateStatus(id, TaskStatusCompleted, "Task completed successfully.")

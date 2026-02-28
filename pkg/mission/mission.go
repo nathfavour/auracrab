@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nathfavour/auracrab/internal/provider"
 	"github.com/nathfavour/auracrab/pkg/config"
 )
 
@@ -188,37 +189,37 @@ type MissionSuggestion struct {
 }
 
 func (m *Manager) ParseMission(text string, querier interface {
-	QueryWithContext(context.Context, string, string) (string, error)
+	QueryWithContext(context.Context, string, string) (provider.CompletionResponse, error)
 }) (*MissionSuggestion, error) {
 	prompt := fmt.Sprintf("Analyze the following text and determine if it contains a potential project mission or hackathon goal. If it does, extract the Title, Goal, and an estimated or explicit Deadline. \n\nTEXT: %s\n\nReturn JSON only: {\"title\": \"...\", \"goal\": \"...\", \"deadline\": \"RFC3339\", \"reason\": \"why this is a mission\"}", text)
 
-	res, err := querier.QueryWithContext(context.Background(), prompt, "ask")
+	resp, err := querier.QueryWithContext(context.Background(), prompt, "ask")
 	if err != nil {
 		return nil, err
 	}
 
 	// Simple JSON extraction
 	var suggestion MissionSuggestion
-	if err := json.Unmarshal([]byte(res), &suggestion); err != nil {
+	if err := json.Unmarshal([]byte(resp.Content), &suggestion); err != nil {
 		// Try regex if direct unmarshal fails (LLM might wrap in markdown)
-		return nil, fmt.Errorf("failed to parse mission suggestion: %v. Raw: %s", err, res)
+		return nil, fmt.Errorf("failed to parse mission suggestion: %v. Raw: %s", err, resp.Content)
 	}
 
 	return &suggestion, nil
 }
 
 func (m *Mission) BootstrapRequirements(querier interface {
-	QueryWithContext(context.Context, string, string) (string, error)
+	QueryWithContext(context.Context, string, string) (provider.CompletionResponse, error)
 }) error {
 	prompt := fmt.Sprintf("MISSION: %s\nGOAL: %s\n\nBased on this mission, autonomously generate a shell script to bootstrap the project environment (e.g., create directories, initialize git/go/rust, create README.md). \n\nReturn SH SCRIPT ONLY. NO MARKDOWN.", m.Title, m.Goal)
 
-	script, err := querier.QueryWithContext(context.Background(), prompt, "crud")
+	resp, err := querier.QueryWithContext(context.Background(), prompt, "crud")
 	if err != nil {
 		return err
 	}
 
 	tmpFile := filepath.Join(os.TempDir(), "auracrab_bootstrap.sh")
-	os.WriteFile(tmpFile, []byte(script), 0755)
+	os.WriteFile(tmpFile, []byte(resp.Content), 0755)
 	defer os.Remove(tmpFile)
 
 	cmd := exec.Command("bash", tmpFile)
@@ -226,17 +227,17 @@ func (m *Mission) BootstrapRequirements(querier interface {
 }
 
 func (m *Mission) PreFlightCheck(querier interface {
-	QueryWithContext(context.Context, string, string) (string, error)
+	QueryWithContext(context.Context, string, string) (provider.CompletionResponse, error)
 }) (string, error) {
 	prompt := fmt.Sprintf("MISSION: %s\nGOAL: %s\n\nGenerate a shell script to perform a comprehensive pre-flight check for this mission. It should run tests, linting, and verify the build. \n\nReturn SH SCRIPT ONLY. NO MARKDOWN.", m.Title, m.Goal)
 
-	script, err := querier.QueryWithContext(context.Background(), prompt, "crud")
+	resp, err := querier.QueryWithContext(context.Background(), prompt, "crud")
 	if err != nil {
 		return "", err
 	}
 
 	tmpFile := filepath.Join(os.TempDir(), "auracrab_preflight.sh")
-	os.WriteFile(tmpFile, []byte(script), 0755)
+	os.WriteFile(tmpFile, []byte(resp.Content), 0755)
 	defer os.Remove(tmpFile)
 
 	out, err := exec.Command("bash", tmpFile).CombinedOutput()
@@ -244,17 +245,17 @@ func (m *Mission) PreFlightCheck(querier interface {
 }
 
 func (m *Mission) FinalizeMission(querier interface {
-	QueryWithContext(context.Context, string, string) (string, error)
+	QueryWithContext(context.Context, string, string) (provider.CompletionResponse, error)
 }) (string, error) {
 	prompt := fmt.Sprintf("MISSION: %s\nGOAL: %s\n\nGenerate a shell script to finalize and deliver this mission. This might involve committing and pushing to git, uploading artifacts, or sending a completion signal. \n\nReturn SH SCRIPT ONLY. NO MARKDOWN.", m.Title, m.Goal)
 
-	script, err := querier.QueryWithContext(context.Background(), prompt, "crud")
+	resp, err := querier.QueryWithContext(context.Background(), prompt, "crud")
 	if err != nil {
 		return "", err
 	}
 
 	tmpFile := filepath.Join(os.TempDir(), "auracrab_finalize.sh")
-	os.WriteFile(tmpFile, []byte(script), 0755)
+	os.WriteFile(tmpFile, []byte(resp.Content), 0755)
 	defer os.Remove(tmpFile)
 
 	out, err := exec.Command("bash", tmpFile).CombinedOutput()

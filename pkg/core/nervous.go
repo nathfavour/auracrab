@@ -124,14 +124,14 @@ func (ns *NervousSystem) initialPlanning(ctx context.Context, task *PulseTask) {
 	prompt := fmt.Sprintf("TASK_PLANNING: Goal: '%s'. Break this into 2-5 atomic, executable steps. Return a simple bulleted list of descriptions.", task.Goal)
 	
 	// Use metabolic query for planning
-	res, err := ns.butler.QueryMetabolic(ctx, prompt, "plan", task.Signature, &Fovea{ActiveSkills: []string{"system"}})
+	resp, err := ns.butler.QueryMetabolic(ctx, prompt, "plan", task.Signature, &Fovea{ActiveSkills: []string{"system"}})
 	if err != nil {
 		return
 	}
 
 	// Improved parser for bullet points
 	lines := []string{}
-	for _, line := range strings.Split(res, "\n") {
+	for _, line := range strings.Split(resp.Content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -170,7 +170,7 @@ func (ns *NervousSystem) executeStep(ctx context.Context, task *PulseTask, step 
 
 	prompt := fmt.Sprintf("TASK_EXECUTION: Goal: '%s'. Current Step: '%s'. Perform this step and return the result.", task.Goal, step.Description)
 	
-	res, err := ns.butler.QueryMetabolic(ctx, prompt, "agent", task.Signature, fovea)
+	resp, err := ns.butler.QueryMetabolic(ctx, prompt, "agent", task.Signature, fovea)
 	
 	ns.mu.Lock()
 	task.Signature.PulseCount++
@@ -180,8 +180,8 @@ func (ns *NervousSystem) executeStep(ctx context.Context, task *PulseTask, step 
 		task.Signature.Anomalies = append(task.Signature.Anomalies, err.Error())
 	} else {
 		step.Status = StepCompleted
-		step.Result = res
-		task.Signature.LastResult = res
+		step.Result = resp.Content
+		task.Signature.LastResult = resp.Content
 		task.Current++
 		if task.Current < len(task.Steps) {
 			task.Signature.RemainingSteps = task.Signature.RemainingSteps[1:]
@@ -203,7 +203,7 @@ func (ns *NervousSystem) executeStep(ctx context.Context, task *PulseTask, step 
 		ns.mu.RUnlock()
 		memory.GetHabitStore().Learn(task.Goal, allSteps)
 
-		update := fmt.Sprintf("✅ Goal Reached: %s\n\nFinal Outcome: %s", task.Goal, res)
+		update := fmt.Sprintf("✅ Goal Reached: %s\n\nFinal Outcome: %s", task.Goal, resp.Content)
 		ns.butler.sendUpdateExt(task.Platform, task.ChatID, update, false) // Fast I/O for completion
 	} else {
 		update := fmt.Sprintf("⚡ Step Complete: %s", step.Description)

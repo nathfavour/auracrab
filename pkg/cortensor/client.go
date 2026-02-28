@@ -2,11 +2,18 @@ package cortensor
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
+
+	"github.com/nathfavour/auracrab/pkg/config"
 )
 
 // SessionMetadata stores Cortensor-specific session state
@@ -32,6 +39,8 @@ type RouterCompletionRequest struct {
 	MinerSelector string            `json:"miner_selector,omitempty"`
 	Context       map[string]string `json:"context,omitempty"`
 	SessionID     string            `json:"session_id"`
+	Compressed    bool              `json:"compressed,omitempty"`
+	Encoding      string            `json:"encoding,omitempty"` // e.g., "gzip/base64"
 }
 
 // RouterCompletionResponse is the response structure from the router
@@ -75,13 +84,38 @@ func (c *Client) Handshake(ctx context.Context) (*SessionMetadata, error) {
 	}
 
 	// Simulated response
-	return &SessionMetadata{
+	meta := &SessionMetadata{
 		SessionID:      c.sessionID,
 		NodeID:         "router-alpha-1",
 		Expiry:         time.Now().Add(24 * time.Hour),
 		CORBalance:     100.0,
 		RouterEndpoint: c.routerEndpoint,
-	}, nil
+	}
+
+	_ = c.SaveState(meta)
+	return meta, nil
+}
+
+func (c *Client) SaveState(meta *SessionMetadata) error {
+	path := filepath.Join(config.DataDir(), "cortensor_state.json")
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func (c *Client) LoadState() (*SessionMetadata, error) {
+	path := filepath.Join(config.DataDir(), "cortensor_state.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var meta SessionMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+	return &meta, nil
 }
 
 // Query sends an inference request to the Cortensor network
@@ -100,6 +134,17 @@ func (c *Client) Query(ctx context.Context, content, intent string) (*RouterComp
 		Context: map[string]string{
 			"agent": "auracrab",
 		},
+	}
+
+	// Context Compression: If context exceeds 32k chars (approx 32k tokens), compress it.
+	if len(content) > 32768 {
+		compressed, err := c.compressContent(content)
+		if err != nil {
+			routerReq.Content = compressed
+			routerReq.Compressed = true
+			routerReq.Encoding = "gzip/base64"
+			fmt.Printf("CortensorClient: Large context compressed (original: %d bytes, compressed: %d bytes)\n", len(content), len(compressed))
+		}
 	}
 
 	reqBody, err := json.Marshal(routerReq)
@@ -129,4 +174,18 @@ func (c *Client) Query(ctx context.Context, content, intent string) (*RouterComp
 	}
 
 	return &routerResp, nil
+}
+
+func (c *Client) compressContent(content string) (string, error) {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	if _, err := gz.Write([]byte(content)); err != nil {
+		return "", err
+	}
+	if err := gz.Close(); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b.Bytes()), nil
+}
+
 }

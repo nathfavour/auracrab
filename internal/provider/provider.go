@@ -14,7 +14,8 @@ type CompletionRequest struct {
 type CompletionResponse struct {
 	Content   string `json:"content"`
 	Reasoning string `json:"reasoning,omitempty"`
-	Proof     string `json:"proof,omitempty"` // For Cortensor cryptographic proofs
+	Proof     string `json:"proof,omitempty"`    // For Cortensor cryptographic proofs
+	MinerID   string `json:"miner_id,omitempty"` // For Cortensor miner attribution
 }
 
 // InferenceProvider is the core interface for interacting with LLM backends

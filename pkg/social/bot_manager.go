@@ -13,12 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nathfavour/auracrab/internal/provider"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/memory"
 )
 
 type ContextualQuerier interface {
-	QueryWithContext(ctx context.Context, prompt string, intent string) (string, error)
+	QueryWithContext(ctx context.Context, prompt string, intent string) (provider.CompletionResponse, error)
 }
 
 type BotMode string
@@ -343,15 +344,15 @@ func (bm *BotManager) handleCommand(ctx context.Context, p MessengerProvider, cf
 
 	go func() {
 		// Use querier for context-aware query
-		finalReply, err := querier.QueryWithContext(ctx, prompt, "agent")
+		resp, err := querier.QueryWithContext(ctx, prompt, "agent")
 		if err != nil {
 			p.SendMessage(update.ChatID, "⚠️ Command system glitch. Don't touch anything.", MessageOptions{ParseMode: ParseModeHTML})
 			return
 		}
 
-		p.SendMessage(update.ChatID, finalReply, MessageOptions{ParseMode: ParseModeHTML})
+		p.SendMessage(update.ChatID, resp.Content, MessageOptions{ParseMode: ParseModeHTML})
 		hist, _ := memory.NewHistoryStore()
-		_ = hist.AddMessage(convID, "assistant", finalReply)
+		_ = hist.AddMessage(convID, "assistant", resp.Content)
 
 		// Update MTTR since we sent a reply
 		bm.mu.Lock()

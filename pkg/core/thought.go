@@ -178,9 +178,9 @@ func (rc *ReflexCell) Pulse(ctx context.Context) error {
 
 func (rc *ReflexCell) reflect(ctx context.Context) {
 	prompt := "SYSTEM_REFLEX: You are idling. Generate a brief, punchy autonomous reflection on your current environment. Keep it under 140 characters."
-	thought, err := rc.butler.QueryWithContext(ctx, prompt, "vibe")
+	resp, err := rc.butler.QueryWithContext(ctx, prompt, "vibe")
 	if err != nil {
 		return
 	}
-	fmt.Printf("REFLEX: %s\n", thought)
+	fmt.Printf("REFLEX: %s\n", resp.Content)
 }
