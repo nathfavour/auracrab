@@ -34,20 +34,23 @@ type ImmuneSystem struct {
 	mu       sync.RWMutex
 	registry string
 	self     *Node
+	bus      *SwarmBus
 }
 
 func NewImmuneSystem(nodeID string) *ImmuneSystem {
 	regDir := filepath.Join(config.DataDir(), "swarm")
 	_ = os.MkdirAll(regDir, 0755)
 
+	selfPID := os.Getpid()
 	return &ImmuneSystem{
 		registry: regDir,
 		self: &Node{
-			PID:    os.Getpid(),
+			PID:    selfPID,
 			ID:     nodeID,
 			Status: StatusHealthy,
 			BornAt: time.Now(),
 		},
+		bus: NewSwarmBus(selfPID),
 	}
 }
 
@@ -124,17 +127,26 @@ func (is *ImmuneSystem) surveillance() error {
 	return nil
 }
 
+func (is *ImmuneSystem) handleSwarmMessage(msg SwarmMessage) {
+	switch msg.Type {
+	case "HANDOFF_REQUEST":
+		fmt.Printf("IMMUNE: Received handoff request from node %d. Checking capacity...\n", msg.From)
+		// If we are healthy and have capacity, we could "accept" it.
+	case "VOTE_APOPTOSIS":
+		targetPID := int(msg.Payload.(float64)) // JSON unmarshal makes it float64
+		fmt.Printf("IMMUNE: Consensus vote for apoptosis of node %d received from node %d.\n", targetPID, msg.From)
+	}
+}
+
 func (is *ImmuneSystem) voteToKill(n Node) {
-	fmt.Printf("IMMUNE: Node %d is mutated/unstable. Casting vote for Apoptosis.\n", n.PID)
-	
-	// In a real Raft-like system, we'd count votes. 
-	// For this local biological system, if we see a mutated node, we might send a SIGKILL 
-	// if we are the "Alpha" or if there's consensus.
-	// For now, let's just log it.
-	
-	// biology.Apoptosis is for SELF. To kill another, we use syscall.
-	// process, _ := os.FindProcess(n.PID)
-	// process.Signal(syscall.SIGKILL)
+	fmt.Printf("IMMUNE: Node %d is mutated/unstable. Casting broadcast vote for Apoptosis.\n", n.PID)
+	_ = is.bus.Broadcast("VOTE_APOPTOSIS", n.PID)
+}
+
+// RequestHandoff broadcasts a request for another node to take over some load.
+func (is *ImmuneSystem) RequestHandoff() {
+	fmt.Println("IMMUNE: System overloaded. Requesting node hand-off...")
+	_ = is.bus.Broadcast("HANDOFF_REQUEST", "High metabolic load detected")
 }
 
 // Name implements spine.Cell
@@ -149,10 +161,24 @@ func (is *ImmuneSystem) Pulse(ctx context.Context) error {
 		return err
 	}
 
-	// 2. Automated Apoptosis (Systemic Cleanup)
-	// Triggered if the node is healthy and idle, or periodically.
+	// 2. Handle Swarm Messages (Isolated I/O Band)
+	messages, err := is.bus.Listen()
+	if err == nil {
+		for _, msg := range messages {
+			is.handleSwarmMessage(msg)
+		}
+	}
+
+	// 3. Automated Apoptosis (Systemic Cleanup)
 	metabolism := biology.GetMetabolism()
 	idleTime := time.Since(metabolism.LastActivity)
+
+	// 4. Autonomous Cloning: Self-replication triggered by high systemic demand
+	if biology.CanClone() && idleTime < 10*time.Second {
+		// Only clone if we are actually busy and healthy.
+		fmt.Println("IMMUNE: System under load but healthy. Triggering autonomous cloning...")
+		_ = biology.Clone()
+	}
 
 	// If idle for more than 2 minutes, perform systemic cleanup
 	if idleTime > 2*time.Minute {

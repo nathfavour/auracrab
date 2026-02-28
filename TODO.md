@@ -2,8 +2,8 @@
 
 This roadmap tracks the evolution of Auracrab into a self-sustaining, resilient, and autonomous biological entity.
 
-## Current Focus: Phase 5 (The Distributed Swarm)
-Our current objective is to deepen the metabolic resilience of Auracrab and begin the transition to a distributed swarm.
+## Current Focus: Phase 6 (Metabolic Optimization)
+Our current objective is to deepen the metabolic resilience of Auracrab and finalize its autonomous capabilities.
 
 ### Phase 4: Metabolism & Hibernation
 - [x] **Adaptive Metabolism**: Refine variable heartbeat (Spine rate) logic (1Hz -> 0.1Hz) based on fine-grained energy/activity telemetry.
@@ -11,10 +11,10 @@ Our current objective is to deepen the metabolic resilience of Auracrab and begi
 - [x] **Automated Apoptosis**: Implement systemic cleanup of "dead cells" (temp files, stale clones, old logs) during idle/hibernation cycles.
 
 ### Phase 5: Swarm Consensus (Distributed Immune System)
-- [ ] **Isolated I/O Band**: Secure, encrypted node-to-node channels for swarm coordination (Moved from Phase 3).
-- [ ] **Node Hand-off**: Ability for an overloaded node to delegate metabolic load to a peer.
-- [ ] **Consensus Voting**: Swarm-wide voting to terminate "mutated" or runaway processes.
-- [ ] **Autonomous Cloning**: Self-replication triggered by high systemic demand and healthy energy reserves.
+- [x] **Isolated I/O Band**: Secure, encrypted node-to-node channels for swarm coordination (Moved from Phase 3).
+- [x] **Node Hand-off**: Ability for an overloaded node to delegate metabolic load to a peer.
+- [x] **Consensus Voting**: Swarm-wide voting to terminate "mutated" or runaway processes.
+- [x] **Autonomous Cloning**: Self-replication triggered by high systemic demand and healthy energy reserves.
 
 ### Phase 6: Metabolic Optimization (The Path of Least Resistance)
 - [x] **Tiered Cognition**: Heuristic gate to solve tasks with local tools (bash/grep) before escalating to expensive AI tokens.

@@ -57,8 +57,8 @@ func deriveKey() []byte {
 	return hash[:]
 }
 
-// encrypt data using AES-GCM
-func encrypt(data []byte) ([]byte, error) {
+// Encrypt data using AES-GCM
+func Encrypt(data []byte) ([]byte, error) {
 	key := deriveKey()
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -86,8 +86,8 @@ func encrypt(data []byte) ([]byte, error) {
 	return json.MarshalIndent(payload, "", "  ")
 }
 
-// decrypt data using AES-GCM
-func decrypt(data []byte) ([]byte, error) {
+// Decrypt data using AES-GCM
+func Decrypt(data []byte) ([]byte, error) {
 	// Try to unmarshal as EncryptedPayload first
 	var payload EncryptedPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
@@ -150,7 +150,7 @@ func loadSecrets() (map[string]string, error) {
 	}
 
 	// Try to decrypt
-	decrypted, err := decrypt(data)
+	decrypted, err := Decrypt(data)
 	secrets := make(map[string]string)
 
 	if err != nil {
@@ -177,7 +177,7 @@ func saveSecrets(secrets map[string]string) error {
 		return err
 	}
 
-	encrypted, err := encrypt(data)
+	encrypted, err := Encrypt(data)
 	if err != nil {
 		return err
 	}
