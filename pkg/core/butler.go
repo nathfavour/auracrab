@@ -133,6 +133,7 @@ func GetButler() *Butler {
 				cort := provider.NewCortensorProvider(
 					cfg.Inference.Cortensor.RouterEndpoint,
 					cfg.Inference.Cortensor.SessionID,
+					cfg.Inference.Cortensor.ConsensusThreshold,
 					vibe,
 				)
 				// Initial handshake in background to not block startup
@@ -740,6 +741,12 @@ func (b *Butler) updateStatus(id string, status TaskStatus, result string) {
 			b.save()
 		}(id, result)
 	}
+}
+
+func (b *Butler) GetProvider() provider.InferenceProvider {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.Provider
 }
 
 func (b *Butler) GetStatus() string {

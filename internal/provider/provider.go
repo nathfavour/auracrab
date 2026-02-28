@@ -31,4 +31,7 @@ type InferenceProvider interface {
 
 	// ManageSession (Optional/Phase 2) handles provider-specific handshake/maintenance
 	ManageSession(ctx context.Context) error
+
+	// GetInfo returns provider-specific status information (e.g., node ID, balance)
+	GetInfo() string
 }

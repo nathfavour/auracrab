@@ -176,6 +176,41 @@ func (c *Client) Query(ctx context.Context, content, intent string) (*RouterComp
 	return &routerResp, nil
 }
 
+// Verify checks the validity of a cryptographic proof with the router
+func (c *Client) Verify(ctx context.Context, proof string) (bool, error) {
+	url := fmt.Sprintf("%s/v1/inference/verify", c.routerEndpoint)
+
+	reqBody, _ := json.Marshal(map[string]string{
+		"proof_hash": proof,
+		"session_id": c.sessionID,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, nil
+	}
+
+	var verifyResp struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err != nil {
+		return false, err
+	}
+
+	return verifyResp.Valid, nil
+}
+
 func (c *Client) compressContent(content string) (string, error) {
 	var b bytes.Buffer
 	gz := gzip.NewWriter(&b)

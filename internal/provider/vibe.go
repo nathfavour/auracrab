@@ -42,3 +42,7 @@ func (p *VibeProvider) ManageSession(ctx context.Context) error {
 	// Vibe provider is a simple stateless UDS connection.
 	return nil
 }
+
+func (p *VibeProvider) GetInfo() string {
+	return "Local (UDS)"
+}
