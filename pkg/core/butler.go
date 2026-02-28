@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nathfavour/auracrab/internal/provider"
 	"github.com/nathfavour/auracrab/pkg/biology"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/connect"
@@ -80,6 +81,7 @@ type Butler struct {
 	Spine     *spine.Spine
 	Nervous   *NervousSystem
 	Metabolizer *Metabolizer
+	Provider    provider.InferenceProvider
 
 	highQueue   chan QueuedMessage
 	normalQueue chan QueuedMessage
@@ -118,6 +120,7 @@ func GetButler() *Butler {
 			normalQueue: make(chan QueuedMessage, 100),
 			lowQueue:    make(chan QueuedMessage, 100),
 			lazyBuffer:  make(map[string][]string),
+			Provider:    provider.NewVibeProvider(),
 		}
 		instance.load()
 		instance.setupCron()
@@ -257,8 +260,17 @@ func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent strin
 
 	biology.GetMetabolism().Burn(biology.CostAPIQuery)
 
-	client := vibe.NewClient()
-	return client.Query(fullPrompt, intent)
+	req := provider.CompletionRequest{
+		Content: fullPrompt,
+		Intent:  intent,
+	}
+
+	resp, err := b.Provider.GetCompletion(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Content, nil
 }
 
 func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (string, error) {
@@ -518,18 +530,21 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 		} else {
 			promptWithContext := b.buildPrompt(msg.Text, historyText)
 
-			client := vibe.NewClient()
-			// Reverting to synchronous Query for better reliability as streaming isn't documented for UDS
-			res, err := client.Query(promptWithContext, intent)
+			req := provider.CompletionRequest{
+				Content: promptWithContext,
+				Intent:  intent,
+			}
+
+			resp, err := b.Provider.GetCompletion(context.Background(), req)
 			if err != nil {
-				reply = fmt.Sprintf("Error from vibeauracle: %v", err)
+				reply = fmt.Sprintf("Error from provider (%s): %v", b.Provider.Name(), err)
 			} else {
-				reply = res
+				reply = resp.Content
 			}
 		}
 
 		if reply == "" {
-			reply = "Empty response from vibeauracle."
+			reply = fmt.Sprintf("Empty response from provider (%s).", b.Provider.Name())
 		}
 	}
 
