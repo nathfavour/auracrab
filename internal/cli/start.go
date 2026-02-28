@@ -23,21 +23,6 @@ var StartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the interactive TUI and butler service",
 	Run: func(cmd *cobra.Command, args []string) {
-		pidFile := config.PIDPath()
-
-		// 1. Check if already running
-		if pidData, err := os.ReadFile(pidFile); err == nil {
-			pid, _ := strconv.Atoi(string(pidData))
-			if isProcessRunning(pid) {
-				fmt.Printf("🦀 Auracrab is already running (PID: %d)\n", pid)
-				os.Exit(1)
-			}
-		}
-
-		// Save PID
-		_ = os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0644)
-		defer os.Remove(pidFile)
-
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -54,14 +39,18 @@ var StartCmd = &cobra.Command{
 			if err := butler.Serve(ctx); err != nil {
 				// Don't print error if it's just context cancellation
 				if ctx.Err() == nil {
-					fmt.Printf("Butler service error: %v\n", err)
+					if verbose {
+						fmt.Printf("Butler service error: %v\n", err)
+					}
 				}
 			}
 		}()
 
 		p := tea.NewProgram(tui.InitialModel())
 		if _, err := p.Run(); err != nil {
-			fmt.Printf("Alas, there's been an error: %v", err)
+			if verbose {
+				fmt.Printf("Alas, there's been an error: %v\n", err)
+			}
 			os.Exit(1)
 		}
 	},

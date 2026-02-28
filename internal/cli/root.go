@@ -123,11 +123,17 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
+	// Disable default version flag which often conflicts with -v
+	rootCmd.Flags().BoolP("version", "V", false, "Print version information")
+	rootCmd.SetVersionTemplate(`{{with .Name}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}
+`)
+
+	// Use PersistentFlags so they are available for all commands and root
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.auracrab.yaml)")
-	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (run in foreground)")
-	rootCmd.Flags().BoolVarP(&kill, "kill", "k", false, "kill the running auracrab process")
-	rootCmd.Flags().BoolVar(&isDaemon, "daemon", false, "internal daemon flag")
-	_ = rootCmd.Flags().MarkHidden("daemon")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (run in foreground)")
+	rootCmd.PersistentFlags().BoolVarP(&kill, "kill", "k", false, "kill the running auracrab process")
+	rootCmd.PersistentFlags().BoolVar(&isDaemon, "daemon", false, "internal daemon flag")
+	_ = rootCmd.PersistentFlags().MarkHidden("daemon")
 }
 
 func initConfig() {
