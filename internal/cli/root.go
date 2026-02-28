@@ -77,7 +77,8 @@ var rootCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			fmt.Printf("🦀 Auracrab started in background (PID: %d)\n", cmd.Process.Pid)
-			return
+			// Crucial: Exit the parent process immediately to free terminal
+			os.Exit(0)
 		}
 
 		// 3. Main process logic
