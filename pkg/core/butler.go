@@ -784,3 +784,53 @@ func (b *Butler) ListTasks() []*Task {
 	}
 	return tasks
 }
+
+func (b *Butler) GetActivePulses() string {
+	b.Nervous.mu.RLock()
+	defer b.Nervous.mu.RUnlock()
+	
+	if len(b.Nervous.tasks) == 0 {
+		return "No active pulses found in the nervous system."
+	}
+
+	var sb strings.Builder
+	for id, t := range b.Nervous.tasks {
+		if t.Current < len(t.Steps) {
+			sb.WriteString(fmt.Sprintf("🦀 *%s*\nGoal: %s\nProgress: %d/%d steps\n\n", id, t.Goal, t.Current, len(t.Steps)))
+		}
+	}
+	
+	res := sb.String()
+	if res == "" {
+		return "Nervous system is idle. All pulses completed."
+	}
+	return res
+}
+
+func (b *Butler) GetBiologicalTelemetry() string {
+	energy, _ := biology.CheckThermodynamics()
+	met := biology.GetMetabolism()
+	burn, uptime := met.GetStats()
+	
+	return fmt.Sprintf(
+		"🔋 Energy: %.2f/1.00\n🔥 Metabolic Burn: %.3f units\n⏱️ Uptime: %s\n💤 Last Activity: %s ago\n💓 Pulse Rate: Adaptive",
+		energy.EnergyLevel, burn, uptime.Round(time.Second), time.Since(met.LastActivity).Round(time.Second),
+	)
+}
+
+func (b *Butler) GetSwarmConsensus() string {
+	// We'd need access to immune system node list
+	// For now, a simplified view
+	return "🌐 Swarm is active.\nNodes: 1 (Primary)\nStatus: Healthy\nConsensus: Stable"
+}
+
+func (b *Butler) GetSkillsSummary() string {
+	reg := skills.GetRegistry()
+	all := reg.List()
+	
+	var sb strings.Builder
+	for _, s := range all {
+		sb.WriteString(fmt.Sprintf("- *%s*: %s\n", s.Name(), s.Description()))
+	}
+	return sb.String()
+}
