@@ -18,6 +18,7 @@ import (
 	"github.com/nathfavour/auracrab/pkg/ego"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/mission"
+	"github.com/nathfavour/auracrab/pkg/schema"
 	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/spine"
 	"github.com/nathfavour/auracrab/pkg/vibe"
@@ -42,17 +43,10 @@ type Task struct {
 	EndedAt   time.Time  `json:"ended_at,omitempty"`
 
 	// Continuity fields
-	Plan           []string          `json:"plan,omitempty"`
-	CurrentStep    int               `json:"current_step,omitempty"`
-	RemainingSteps []string          `json:"remaining_steps,omitempty"`
-	PulseCount     int               `json:"pulse_count,omitempty"`
-	Anomalies      []string          `json:"anomalies,omitempty"`
-	LastCheckpoint time.Time         `json:"last_checkpoint,omitempty"`
-	RetryCount     int               `json:"retry_count,omitempty"`
-	EnergyBudget   float64           `json:"energy_budget,omitempty"`
-	Platform       string            `json:"platform,omitempty"`
-	ChatID         string            `json:"chat_id,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	Continuity *schema.TaskContinuity `json:"continuity,omitempty"`
+	Platform   string                 `json:"platform,omitempty"`
+	ChatID     string                 `json:"chat_id,omitempty"`
+	Metadata   map[string]string      `json:"metadata,omitempty"`
 }
 
 type Butler struct {
