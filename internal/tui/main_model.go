@@ -111,8 +111,6 @@ type Model struct {
 	lastResponse string
 	isCapturing  bool
 	updateStatus string
-	providerName string
-	providerInfo string
 	// History fields
 	commandHistory []string
 	historyIndex   int
@@ -160,8 +158,6 @@ func InitialModel() Model {
 		BorderForeground(gray).
 		Padding(0, 1)
 
-	p := butler.GetProvider()
-
 	return Model{
 		tasks:          butler.ListTasks(),
 		statusMsg:      butler.GetStatus(),
@@ -172,8 +168,6 @@ func InitialModel() Model {
 		configValues:   make(map[string]string),
 		commandHistory: hist,
 		historyIndex:   -1,
-		providerName:   p.Name(),
-		providerInfo:   p.GetInfo(),
 	}
 }
 
@@ -267,8 +261,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks = butler.ListTasks()
 		m.statusMsg = butler.GetStatus()
 		m.healthMsg = butler.WatchHealth()
-		m.providerName = butler.GetProvider().Name()
-		m.providerInfo = butler.GetProvider().GetInfo()
 
 		var skillNames []string
 		v := vault.GetVault()
@@ -751,9 +743,6 @@ func (m Model) View() string {
 
 	sidebar.WriteString("Health: " + healthStyle.Render(m.healthMsg) + "\n\n")
 	sidebar.WriteString("Status: " + m.statusMsg + "\n\n")
-
-	sidebar.WriteString(styleSectionTitle.Render("INFERENCE") + "\n")
-	sidebar.WriteString(fmt.Sprintf("Provider: %s\nInfo: %s\n\n", strings.Title(m.providerName), m.providerInfo))
 
 	if m.updateStatus != "" {
 		sidebar.WriteString(lipgloss.NewStyle().Foreground(green).Bold(true).Render(m.updateStatus) + "\n\n")

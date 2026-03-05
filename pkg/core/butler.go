@@ -5,27 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/nathfavour/auracrab/internal/provider"
-	"github.com/nathfavour/auracrab/pkg/biology"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/connect"
 	"github.com/nathfavour/auracrab/pkg/crabs"
 	"github.com/nathfavour/auracrab/pkg/cron"
 	"github.com/nathfavour/auracrab/pkg/ego"
-	"github.com/nathfavour/auracrab/pkg/immune"
 	"github.com/nathfavour/auracrab/pkg/memory"
 	"github.com/nathfavour/auracrab/pkg/mission"
-	"github.com/nathfavour/auracrab/pkg/notary"
-	"github.com/nathfavour/auracrab/pkg/skills"
 	"github.com/nathfavour/auracrab/pkg/social"
 	"github.com/nathfavour/auracrab/pkg/spine"
-	"github.com/nathfavour/auracrab/pkg/vault"
 	"github.com/nathfavour/auracrab/pkg/vibe"
 )
 
@@ -46,24 +39,19 @@ type Task struct {
 	Logs      []string   `json:"logs,omitempty"`
 	StartedAt time.Time  `json:"started_at,omitempty"`
 	EndedAt   time.Time  `json:"ended_at,omitempty"`
-}
 
-type Priority int
-
-const (
-	PriorityLow Priority = iota
-	PriorityNormal
-	PriorityHigh
-	PriorityCritical
-)
-
-type QueuedMessage struct {
-	Platform string
-	ChatID   string
-	From     string
-	Text     string
-	Priority Priority
-	Received time.Time
+	// Continuity fields
+	Plan           []string          `json:"plan,omitempty"`
+	CurrentStep    int               `json:"current_step,omitempty"`
+	RemainingSteps []string          `json:"remaining_steps,omitempty"`
+	PulseCount     int               `json:"pulse_count,omitempty"`
+	Anomalies      []string          `json:"anomalies,omitempty"`
+	LastCheckpoint time.Time         `json:"last_checkpoint,omitempty"`
+	RetryCount     int               `json:"retry_count,omitempty"`
+	EnergyBudget   float64           `json:"energy_budget,omitempty"`
+	Platform       string            `json:"platform,omitempty"`
+	ChatID         string            `json:"chat_id,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
 }
 
 type Butler struct {
@@ -77,17 +65,7 @@ type Butler struct {
 	History   *memory.HistoryStore
 	Missions  *mission.Manager
 	Ego       *ego.Ego
-	channels  map[string]connect.Channel
 	Spine     *spine.Spine
-	Nervous   *NervousSystem
-	Metabolizer *Metabolizer
-	Provider    provider.InferenceProvider
-
-	highQueue   chan QueuedMessage
-	normalQueue chan QueuedMessage
-	lowQueue    chan QueuedMessage
-
-	lazyBuffer  map[string][]string // platform:chatID -> messages
 }
 
 var (
@@ -106,71 +84,17 @@ func GetButler() *Butler {
 		eg, _ := ego.NewEgo()
 
 		instance = &Butler{
-			tasks:       make(map[string]*Task),
-			stateDir:    stateDir,
-			registry:    reg,
-			scheduler:   cron.NewScheduler(),
-			Memory:      mem,
-			History:     hist,
-			Missions:    miss,
-			Ego:         eg,
-			channels:    make(map[string]connect.Channel),
-			Spine:       spine.NewSpine(1 * time.Second), // 1Hz Heartbeat
-			highQueue:   make(chan QueuedMessage, 50),
-			normalQueue: make(chan QueuedMessage, 100),
-			lowQueue:    make(chan QueuedMessage, 100),
-			lazyBuffer:  make(map[string][]string),
+			tasks:     make(map[string]*Task),
+			stateDir:  stateDir,
+			registry:  reg,
+			scheduler: cron.NewScheduler(),
+			Memory:    mem,
+			History:   hist,
+			Missions:  miss,
+			Ego:       eg,
 		}
-
-		// Initialize Inference Provider from Config
-		cfg, err := config.LoadConfig()
-		if err != nil {
-			fmt.Printf("Butler: Error loading config: %v. Falling back to default provider.\n", err)
-			instance.Provider = provider.NewVibeProvider()
-		} else {
-			vibe := provider.NewVibeProvider()
-			if cfg.Inference.ActiveProvider == "cortensor" {
-				cort := provider.NewCortensorProvider(
-					cfg.Inference.Cortensor.RouterEndpoint,
-					cfg.Inference.Cortensor.SessionID,
-					cfg.Inference.Cortensor.ConsensusThreshold,
-					vibe,
-				)
-				// Initial handshake in background to not block startup
-				go func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cancel()
-					if err := cort.ManageSession(ctx); err != nil {
-						fmt.Printf("Butler: Cortensor session handshake failed: %v. Fallback active.\n", err)
-					}
-				}()
-				instance.Provider = cort
-			} else {
-				instance.Provider = vibe
-			}
-		}
-
 		instance.load()
 		instance.setupCron()
-		
-		// Initialize Metabolizer
-		instance.Metabolizer = NewMetabolizer(instance)
-
-		// Initialize Immune System
-		nodeID := fmt.Sprintf("node-%d", time.Now().UnixNano())
-		imm := immune.NewImmuneSystem(nodeID)
-		_ = imm.Register()
-		instance.Spine.Attach(imm)
-
-		// Initialize Reflex Cell
-		instance.Spine.Attach(NewReflexCell(instance))
-
-		// Initialize Nervous System (Task Orchestration)
-		ns := NewNervousSystem(instance)
-		instance.Nervous = ns
-		instance.Spine.Attach(ns)
-
-		instance.Spine.Attach(instance)
 	})
 	return instance
 }
@@ -184,22 +108,13 @@ func (b *Butler) Serve(ctx context.Context) error {
 	b.running = true
 	b.mu.Unlock()
 
-	// Start Spine (The Heartbeat)
-	go b.Spine.Breathes(ctx)
-
 	// Start integrations
-	chans := connect.GetChannels()
-	if len(chans) == 0 {
+	channels := connect.GetChannels()
+	if len(channels) == 0 {
 		fmt.Println("Butler: No messaging channels (Telegram/Discord) configured.")
 	}
 
-	b.mu.Lock()
-	for name, ch := range chans {
-		b.channels[name] = ch
-	}
-	b.mu.Unlock()
-
-	for _, ch := range chans {
+	for _, ch := range channels {
 		go func(c connect.Channel) {
 			err := c.Start(ctx, b.handleChannelMessage)
 			if err != nil {
@@ -210,9 +125,6 @@ func (b *Butler) Serve(ctx context.Context) error {
 
 	// Start Social Bots (POC Migration)
 	social.GetBotManager().StartBots(ctx, b.History, b, b.handleChannelMessage)
-
-	// Start queue processor
-	go b.processQueue(ctx)
 
 	// Initial health check
 	fmt.Println(b.WatchHealth())
@@ -227,108 +139,13 @@ func (b *Butler) Serve(ctx context.Context) error {
 	return nil
 }
 
-// Name implements spine.Cell
-func (b *Butler) Name() string {
-	return "ButlerCore"
-}
-
-// Pulse implements spine.Cell
-func (b *Butler) Pulse(ctx context.Context) error {
-	// Biological self-maintenance
-	if biology.ShouldApoptose() {
-		biology.Apoptosis("Energy levels critically low - terminal metabolic failure")
-	}
-
-	// Check if we should clone ourselves if underutilized (The Swarm Principle)
-	if biology.CanClone() && len(b.tasks) > 5 {
-		// Potential for cloning detected.
-	}
-
-	b.flushLazyIO()
-
-	// Provider Session Maintenance (e.g., Cortensor heartbeat/refresh)
-	// We do this approximately every 15 minutes (900 pulses at 1Hz)
-	if time.Now().Unix()%900 == 0 {
-		go func() {
-			pCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			_ = b.Provider.ManageSession(pCtx)
-		}()
-	}
-
-	return nil
-}
-
-func (b *Butler) flushLazyIO() {
-	b.mu.Lock()
-	if len(b.lazyBuffer) == 0 {
-		b.mu.Unlock()
-		return
-	}
-
-	// Copy and clear buffer
-	currentBuffer := b.lazyBuffer
-	b.lazyBuffer = make(map[string][]string)
-	b.mu.Unlock()
-
-	for key, msgs := range currentBuffer {
-		parts := strings.Split(key, ":")
-		if len(parts) != 2 {
-			continue
-		}
-		platform, chatID := parts[0], parts[1]
-		
-		// Batch messages with "..." separator
-		batched := strings.Join(msgs, "\n...\n")
-		b.sendUpdateExt(platform, chatID, "⏳ [Lazy I/O Pulse]\n"+batched, false)
-	}
-}
-
 func (b *Butler) setupCron() {
 	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
-		_, _ = b.StartTask(context.Background(), "run security audit and log results to ~/.auracrab/audits.log", "")
+		_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
 	})
 
 	// Memory sync or cleanup can happen here
-}
-
-func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent string, signature *ThoughtSignature, fovea *Fovea) (provider.CompletionResponse, error) {
-	start := time.Now()
-	fullPrompt := b.Metabolizer.Build(prompt, signature, fovea)
-
-	biology.GetMetabolism().Burn(biology.CostAPIQuery)
-
-	req := provider.CompletionRequest{
-		Content: fullPrompt,
-		Intent:  intent,
-	}
-
-	resp, err := b.Provider.GetCompletion(ctx, req)
-	latency := time.Since(start)
-
-	b.BroadcastInference(resp, latency, err)
-
-	return resp, err
-}
-
-func (b *Butler) BroadcastInference(resp provider.CompletionResponse, latency time.Duration, err error) {
-	status := "success"
-	if err != nil {
-		status = "error"
-	}
-
-	b.Spine.Broadcast(spine.Event{
-		Type: "inference",
-		Payload: map[string]interface{}{
-			"provider": b.Provider.Name(),
-			"status":   status,
-			"latency":  latency.String(),
-			"miner":    resp.MinerID,
-			"proof":    resp.Proof != "",
-			"error":    err,
-		},
-	})
 }
 
 func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent string) (provider.CompletionResponse, error) {
@@ -336,68 +153,6 @@ func (b *Butler) QueryWithContext(ctx context.Context, prompt string, intent str
 		intent = "vibe"
 	}
 
-	// TIER 0: Deterministic Heuristic Gate (Minimizing Energy)
-	if res, ok := b.TryDeterministic(prompt); ok {
-		fmt.Printf("Butler: Tier 0 (Deterministic) hit! Energy Saved.\n")
-		biology.GetMetabolism().Burn(biology.CostComputeLow)
-		return provider.CompletionResponse{Content: res}, nil
-	}
-
-	// Use empty signature and general fovea for generic queries
-	return b.QueryMetabolic(ctx, prompt, intent, nil, nil)
-}
-
-func (b *Butler) TryDeterministic(prompt string) (string, bool) {
-	lower := strings.ToLower(strings.TrimSpace(prompt))
-
-	// Level 0.1: Math Heuristic
-	if strings.HasPrefix(lower, "calculate ") {
-		expr := strings.TrimPrefix(lower, "calculate ")
-		// Use bc for math if available
-		cmd := exec.Command("bc", "-l")
-		cmd.Stdin = strings.NewReader(expr + "\n")
-		out, err := cmd.Output()
-		if err == nil {
-			return strings.TrimSpace(string(out)), true
-		}
-	}
-
-	// Level 0.2: File System Heuristic
-	if lower == "list files" || lower == "ls" {
-		files, _ := filepath.Glob("*")
-		if len(files) == 0 {
-			return "No files found in current directory.", true
-		}
-		return "Files: " + strings.Join(files, ", "), true
-	}
-
-	// Level 0.3: Proprioceptive Heuristic
-	switch lower {
-	case "status", "health", "check":
-		return b.GetStatus() + "\n" + b.WatchHealth(), true
-	case "whoami":
-		return "I am Auracrab, a biological autonomous entity.", true
-	case "date", "time":
-		return time.Now().Format(time.RFC1123), true
-	case "disk usage", "df":
-		out, _ := exec.Command("df", "-h", ".").Output()
-		return string(out), true
-	case "memory usage", "free":
-		out, _ := exec.Command("free", "-m").Output()
-		return string(out), true
-	}
-
-	// Level 0.4: Search Heuristic
-	if strings.HasPrefix(lower, "find ") {
-		pattern := strings.TrimPrefix(lower, "find ")
-		out, _ := exec.Command("find", ".", "-name", "*"+pattern+"*", "-maxdepth", "2").Output()
-		return string(out), true
-	}
-
-	return "", false
-}
-
-func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 	cwd, _ := os.Getwd()
 	files, _ := filepath.Glob("*")
 	if len(files) > 25 {
@@ -408,148 +163,112 @@ func (b *Butler) buildPrompt(userMessage string, historyText string) string {
 		dirSnapshot = "(no files discovered)"
 	}
 
-	browserStatus := "DISCONNECTED"
-	if bc := connect.GetBrowserChannel(); bc != nil && bc.IsActive() {
-		browserStatus = "CONNECTED (ready for automation)"
-	}
-
-	// Proprioception: Gather Internal Bio-Stats
-	bioStats, _ := biology.CheckThermodynamics()
-	metabolism := biology.GetMetabolism()
-	totalBurn, _ := metabolism.GetStats()
-
-	prompt := fmt.Sprintf(
-		"AURACRAB_SYSTEM_CONTEXT\n"+
-			"WORKING_DIRECTORY: %s\n"+
-			"PROJECT_FILES_SNAPSHOT:\n%s\n\n"+
-			"SYSTEM_BIOLOGY:\n"+
-			"- ENERGY_LEVEL: %.2f/1.00\n"+
-			"- CPU_USAGE: %.1f%%\n"+
-			"- MEMORY_USAGE: %.1f%%\n"+
-			"- METABOLIC_BURN: %.3f units\n"+
-			"- THERMODYNAMIC_LIMIT: 0.15 (Conserve energy below this)\n\n"+
-			"BROWSER_TOOL_STATUS: %s\n"+
-			"BROWSER_CAPABILITIES:\n"+
-			"- action: 'browser', ... (Atomic actions: open, scrape, click, type, hover, wait, screenshot)\n"+
-			"- action: 'browser_agent', goal: '...' (Autonomous agent for complex multi-step browser tasks)\n\n"+
-			"BROWSER_RULES:\n"+
-			"- Use the 'browser' skill for simple, single-action web tasks.\n"+
-			"- Use the 'browser_agent' skill for complex goals that require multiple steps (e.g., 'Find the best flight to NYC', 'Post a thread on Twitter about AI').\n"+
-			"- If a website is unknown, use 'open' with a Google search URL or guess the most likely URL.\n"+
-			"- Prefer human-like interaction (click, type) over simple scraping when navigating complex apps.\n"+
-			"- Act as if you are using the user's local browser session (you are!).\n\n"+
-			"CONVERSATION_HISTORY:\n%s\n\n"+
-			"USER_PROMPT:\n%s\n\n"+
-			"OUTPUT_RULES:\n"+
-			"- Return the final actionable answer only.\n"+
-			"- Do not include chain-of-thought or hidden reasoning.\n"+
-			"- Be concrete, execution-oriented, and directly useful. Optimize for energy efficiency.",
+	customPrompt := fmt.Sprintf(
+		"AURACRAB_CUSTOM_PROMPT_TEMPLATE\nWORKING_DIRECTORY:\n%s\n\nPROJECT_FILES_SNAPSHOT:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
 		cwd,
 		dirSnapshot,
-		bioStats.EnergyLevel,
-		bioStats.CPUUsage,
-		bioStats.MemoryUsage,
-		totalBurn,
-		browserStatus,
-		historyText,
-		userMessage,
+		prompt,
 	)
-	fmt.Printf("Butler: Built prompt (length: %d)\n", len(prompt))
-	return prompt
-}
-func (b *Butler) handleChannelMessage(platform, chatID, from, text string) string {
-	fmt.Printf("Butler: Received message from %s on %s: %s\n", from, platform, text)
 
-	// Internal command routing
-	switch text {
-	case "get_status_internal":
-		return b.GetStatus() + "\n" + b.WatchHealth()
-	case "get_active_tasks_internal":
-		return b.GetActivePulses()
-	case "get_bio_stats_internal":
-		return b.GetBiologicalTelemetry()
-	case "get_swarm_status_internal":
-		return b.GetSwarmConsensus()
-	case "get_skills_internal":
-		return b.GetSkillsSummary()
+	client := vibe.NewClient()
+	reply, err := client.Query(customPrompt, intent)
+	if err != nil {
+		return provider.CompletionResponse{}, err
 	}
-
-	priority := PriorityNormal
-...
-
-	if strings.Contains(strings.ToLower(text), "urgent") || strings.Contains(strings.ToLower(text), "critical") {
-		priority = PriorityHigh
+	reply = strings.TrimSpace(reply)
+	if reply == "" {
+		return provider.CompletionResponse{}, fmt.Errorf("empty response from vibeauracle")
 	}
-
-	msg := QueuedMessage{
-		Platform: platform,
-		ChatID:   chatID,
-		From:     from,
-		Text:     text,
-		Priority: priority,
-		Received: time.Now(),
-	}
-
-	switch priority {
-	case PriorityHigh, PriorityCritical:
-		b.highQueue <- msg
-	case PriorityNormal:
-		b.normalQueue <- msg
-	default:
-		b.lowQueue <- msg
-	}
-
-	return ""
+	return provider.CompletionResponse{Content: reply}, nil
 }
 
-func (b *Butler) processQueue(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg := <-b.highQueue:
-			go b.processMessage(msg)
-		case msg := <-b.normalQueue:
-			go b.processMessage(msg)
-		case msg := <-b.lowQueue:
-			go b.processMessage(msg)
-		case <-time.After(100 * time.Millisecond):
-			// Keep loop alive
-		}
+func (b *Butler) handleChannelMessage(platform string, chatID string, from string, text string) string {
+	if text == "get_status_internal" {
+		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
 	}
-}
-
-func (b *Butler) processMessage(msg QueuedMessage) {
-	fmt.Printf("Butler: Processing message from %s [%s]: %s\n", msg.From, msg.Platform, msg.Text)
-
-	// Send "Thinking..." heartbeat
-	b.sendUpdate(msg.Platform, msg.ChatID, "Thinking...")
 
 	// Record incoming message in history
-	convID, err := b.History.GetOrCreateConversationForPlatform(msg.Platform, msg.ChatID)
-
-	// Fetch conversation history for context BEFORE adding current message
-	historyText := ""
-	if convID != "" {
-		history, _ := b.History.GetHistory(convID)
-		// Only take last 10 messages for context window safety
-		start := len(history) - 10
-		if start < 0 {
-			start = 0
-		}
-		for _, m := range history[start:] {
-			historyText += fmt.Sprintf("%s: %s\n", strings.ToUpper(m.Role), m.Content)
-		}
-	}
-
-	// Now add the current message to history
+	convID, err := b.History.GetOrCreateConversationForPlatform(platform, from)
 	if err == nil {
-		_ = b.History.AddMessage(convID, "user", msg.Text)
+		_ = b.History.AddMessage(convID, "user", text)
 	}
 
-	var reply string
-	if strings.HasPrefix(msg.Text, "@") {
-		parts := strings.SplitN(msg.Text, " ", 2)
+	if strings.HasPrefix(text, "@") {
+		parts := strings.SplitN(text, " ", 2)
+		if len(parts) > 1 {
+			crabID := strings.TrimPrefix(parts[0], "@")
+			if c, err := b.registry.Get(crabID); err == nil {
+				// Start task with crab's specialized instructions
+				augmentedTask := fmt.Sprintf("CRAB AGENT: %s\nINSTRUCTIONS: %s\n\nUSER TASK: %s", c.Name, c.Instructions, parts[1])
+				task, err := b.StartTask(context.Background(), augmentedTask, platform, chatID, convID)
+				if err != nil {
+					return fmt.Sprintf("Error starting delegated task: %v", err)
+				}
+				reply := fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
+				if err == nil {
+					_ = b.History.AddMessage(convID, "assistant", reply)
+				}
+				return reply
+			}
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	resp, err := b.QueryWithContext(ctx, text, "vibe")
+	if err != nil {
+		return fmt.Sprintf("Error processing prompt: %v", err)
+	}
+	reply := resp.Content
+	if convID != "" {
+		_ = b.History.AddMessage(convID, "assistant", reply)
+	}
+	return reply
+}
+
+	cwd, _ := os.Getwd()
+	files, _ := filepath.Glob("*")
+	if len(files) > 25 {
+		files = files[:25]
+	}
+	dirSnapshot := strings.Join(files, "\n")
+	if dirSnapshot == "" {
+		dirSnapshot = "(no files discovered)"
+	}
+
+	customPrompt := fmt.Sprintf(
+		"AURACRAB_CUSTOM_PROMPT_TEMPLATE\nWORKING_DIRECTORY:\n%s\n\nPROJECT_FILES_SNAPSHOT:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
+		cwd,
+		dirSnapshot,
+		prompt,
+	)
+
+	client := vibe.NewClient()
+	reply, err := client.Query(customPrompt, intent)
+	if err != nil {
+		return "", err
+	}
+	reply = strings.TrimSpace(reply)
+	if reply == "" {
+		return "", fmt.Errorf("empty response from vibeauracle")
+	}
+	return reply, nil
+}
+
+func (b *Butler) handleChannelMessage(from string, text string) string {
+	if text == "get_status_internal" {
+		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
+	}
+
+	// Record incoming message in history
+	convID, err := b.History.GetOrCreateConversationForPlatform("messaging", from)
+	if err == nil {
+		_ = b.History.AddMessage(convID, "user", text)
+	}
+
+	if strings.HasPrefix(text, "@") {
+		parts := strings.SplitN(text, " ", 2)
 		if len(parts) > 1 {
 			crabID := strings.TrimPrefix(parts[0], "@")
 			if c, err := b.registry.Get(crabID); err == nil {
@@ -557,94 +276,28 @@ func (b *Butler) processMessage(msg QueuedMessage) {
 				augmentedTask := fmt.Sprintf("CRAB AGENT: %s\nINSTRUCTIONS: %s\n\nUSER TASK: %s", c.Name, c.Instructions, parts[1])
 				task, err := b.StartTask(context.Background(), augmentedTask, convID)
 				if err != nil {
-					reply = fmt.Sprintf("Error starting delegated task: %v", err)
-				} else {
-					reply = fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
+					return fmt.Sprintf("Error starting delegated task: %v", err)
 				}
+				reply := fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
+				if err == nil {
+					_ = b.History.AddMessage(convID, "assistant", reply)
+				}
+				return reply
 			}
 		}
 	}
 
-	if reply == "" {
-		// Context with hard timeout for the entire processing
-		_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
 
-		intent := "ask" // Default to documented 'ask' intent
-		lowerText := strings.ToLower(msg.Text)
-		if strings.Contains(lowerText, "plan") || strings.Contains(lowerText, "analyze") || strings.Contains(lowerText, "status") {
-			intent = "plan"
-		}
-		if strings.HasPrefix(lowerText, "create") || strings.HasPrefix(lowerText, "update") ||
-			strings.HasPrefix(lowerText, "delete") || strings.HasPrefix(lowerText, "list") ||
-			strings.Contains(lowerText, "task") || strings.Contains(lowerText, "run") {
-			intent = "agent" // Map CRUD/Task intents to 'agent'
-		}
-
-		// DELEGATION: If the intent is agentic, hand over to the Nervous System
-		if intent == "plan" || intent == "agent" {
-			b.Nervous.Plan(msg.Platform, msg.ChatID, msg.Text)
-			reply = "Acknowledged. I am breaking this down and attaching it to my Nervous System for execution."
-		} else {
-			promptWithContext := b.buildPrompt(msg.Text, historyText)
-
-			req := provider.CompletionRequest{
-				Content: promptWithContext,
-				Intent:  intent,
-			}
-
-			resp, err := b.Provider.GetCompletion(context.Background(), req)
-			if err != nil {
-				reply = fmt.Sprintf("Error from provider (%s): %v", b.Provider.Name(), err)
-			} else {
-				reply = resp.Content
-			}
-		}
-
-		if reply == "" {
-			reply = fmt.Sprintf("Empty response from provider (%s).", b.Provider.Name())
-		}
+	reply, err := b.QueryWithContext(ctx, text, "vibe")
+	if err != nil {
+		return fmt.Sprintf("Error processing prompt: %v", err)
 	}
-
 	if convID != "" {
 		_ = b.History.AddMessage(convID, "assistant", reply)
 	}
-
-	// Send final reply
-	fmt.Printf("Butler: Sending reply to %s: %s\n", msg.From, reply)
-	b.sendUpdate(msg.Platform, msg.ChatID, reply)
-}
-
-func (b *Butler) sendUpdate(platform, chatID, text string) {
-	b.sendUpdateExt(platform, chatID, text, false)
-}
-
-func (b *Butler) sendUpdateExt(platform, chatID, text string, lazy bool) {
-	if lazy {
-		b.mu.Lock()
-		key := fmt.Sprintf("%s:%s", platform, chatID)
-		b.lazyBuffer[key] = append(b.lazyBuffer[key], text)
-		b.mu.Unlock()
-		return
-	}
-
-	b.mu.RLock()
-	ch, ok := b.channels[platform]
-	b.mu.RUnlock()
-
-	if ok {
-		err := ch.Send(chatID, text)
-		if err == nil {
-			return
-		}
-		fmt.Printf("Butler: Channel Send failed for %s, falling back: %v\n", platform, err)
-	}
-
-	// Fallback to social bot manager if not a direct channel or if direct channel failed
-	err := social.GetBotManager().SendMessage(platform, chatID, text)
-	if err != nil {
-		fmt.Printf("Butler: All send attempts failed for %s: %v\n", platform, err)
-	}
+	return reply
 }
 
 func (b *Butler) load() {
@@ -689,20 +342,14 @@ func (b *Butler) executeTask(id, content string, convID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	resp, err := b.QueryWithContext(ctx, content, "vibe")
+	reply, err := b.QueryWithContext(ctx, content, "vibe")
 	if err != nil {
-		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying provider: %v", err))
+		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying vibeauracle: %v", err))
 		return
 	}
 	b.mu.Lock()
 	if t, ok := b.tasks[id]; ok {
-		t.Logs = append(t.Logs, resp.Content)
-		if resp.MinerID != "" {
-			t.Logs = append(t.Logs, fmt.Sprintf("[MINER] %s", resp.MinerID))
-		}
-		if resp.Proof != "" {
-			t.Logs = append(t.Logs, fmt.Sprintf("[PROOF] hash:%s", resp.Proof))
-		}
+		t.Logs = append(t.Logs, reply)
 	}
 	b.mu.Unlock()
 	b.updateStatus(id, TaskStatusCompleted, "Task completed successfully.")
@@ -734,44 +381,6 @@ func (b *Butler) updateStatus(id string, status TaskStatus, result string) {
 	}
 	b.mu.Unlock()
 	b.save()
-
-	// On-chain Notarization Hook
-	if status == TaskStatusCompleted {
-		go func(taskID, taskResult string) {
-			v := vault.GetVault()
-			key, err := v.Get("NOTARY_PRIVATE_KEY")
-			if err != nil || key == "" {
-				return // Notary not configured
-			}
-
-			// Use a shorter summary if the result is too long
-			summary := taskResult
-			if len(summary) > 200 {
-				summary = summary[:200] + "..."
-			}
-
-			logData := fmt.Sprintf("TASK_COMPLETED ID=%s RESULT=%s", taskID, summary)
-			txHash, err := notary.NotarizeActivity(key, logData)
-			if err != nil {
-				fmt.Printf("Notary Error: %v\n", err)
-				return
-			}
-			fmt.Printf("Notary: Proof submitted. TX Hash: %s\n", txHash)
-
-			b.mu.Lock()
-			if t, ok := b.tasks[taskID]; ok {
-				t.Logs = append(t.Logs, fmt.Sprintf("[ON-CHAIN PROOF] tx:%s", txHash))
-			}
-			b.mu.Unlock()
-			b.save()
-		}(id, result)
-	}
-}
-
-func (b *Butler) GetProvider() provider.InferenceProvider {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.Provider
 }
 
 func (b *Butler) GetStatus() string {
@@ -792,29 +401,6 @@ func (b *Butler) GetStatus() string {
 
 func (b *Butler) WatchHealth() string {
 	home, _ := os.UserHomeDir()
-
-	// Use a non-blocking health check or one with a very short timeout
-	client := vibe.NewClient()
-
-	// Use a separate goroutine for the ping to avoid hanging the butler if the socket is stuck
-	pingDone := make(chan error, 1)
-	go func() {
-		pingDone <- client.Ping()
-	}()
-
-	select {
-	case err := <-pingDone:
-		if err != nil {
-			fmt.Printf("Butler: Vibeauracle socket unresponsive, attempting restart: %v\n", err)
-			go b.restartVibeaura()
-			return "System Health: Warning (Vibeauracle unresponsive). Self-healing initiated."
-		}
-	case <-time.After(2 * time.Second):
-		fmt.Println("Butler: Health check ping timed out, attempting restart...")
-		go b.restartVibeaura()
-		return "System Health: Warning (Vibeauracle ping timeout). Self-healing initiated."
-	}
-
 	logPath := filepath.Join(home, ".vibeauracle", "vibeauracle.log")
 
 	data, err := os.ReadFile(logPath)
@@ -838,26 +424,7 @@ func (b *Butler) WatchHealth() string {
 	if errCount == 0 {
 		return "System Health: Excellent."
 	}
-	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura check'.", errCount)
-}
-
-func (b *Butler) restartVibeaura() {
-	fmt.Println("Butler: Restarting vibeaura daemon...")
-	// Use the dedicated restart command if available, or daemon start
-	_ = exec.Command("vibeaura", "restart").Run()
-	time.Sleep(2 * time.Second)
-
-	// Ensure it's started
-	cmd := exec.Command("vibeaura", "daemon", "start")
-	err := cmd.Start()
-	if err != nil {
-		fmt.Printf("Butler: Failed to restart vibeaura: %v\n", err)
-		return
-	}
-
-	// Wait a bit for it to initialize and create the socket
-	time.Sleep(5 * time.Second)
-	fmt.Println("Butler: Vibeaura restart attempt completed.")
+	return fmt.Sprintf("System Health: Warning (%d anomalies detected). Recommend 'vibeaura doctor'.", errCount)
 }
 
 func (b *Butler) ListTasks() []*Task {
@@ -868,54 +435,4 @@ func (b *Butler) ListTasks() []*Task {
 		tasks = append(tasks, t)
 	}
 	return tasks
-}
-
-func (b *Butler) GetActivePulses() string {
-	b.Nervous.mu.RLock()
-	defer b.Nervous.mu.RUnlock()
-	
-	if len(b.Nervous.tasks) == 0 {
-		return "No active pulses found in the nervous system."
-	}
-
-	var sb strings.Builder
-	for id, t := range b.Nervous.tasks {
-		if t.Current < len(t.Steps) {
-			sb.WriteString(fmt.Sprintf("🦀 *%s*\nGoal: %s\nProgress: %d/%d steps\n\n", id, t.Goal, t.Current, len(t.Steps)))
-		}
-	}
-	
-	res := sb.String()
-	if res == "" {
-		return "Nervous system is idle. All pulses completed."
-	}
-	return res
-}
-
-func (b *Butler) GetBiologicalTelemetry() string {
-	energy, _ := biology.CheckThermodynamics()
-	met := biology.GetMetabolism()
-	burn, uptime := met.GetStats()
-	
-	return fmt.Sprintf(
-		"🔋 Energy: %.2f/1.00\n🔥 Metabolic Burn: %.3f units\n⏱️ Uptime: %s\n💤 Last Activity: %s ago\n💓 Pulse Rate: Adaptive",
-		energy.EnergyLevel, burn, uptime.Round(time.Second), time.Since(met.LastActivity).Round(time.Second),
-	)
-}
-
-func (b *Butler) GetSwarmConsensus() string {
-	// We'd need access to immune system node list
-	// For now, a simplified view
-	return "🌐 Swarm is active.\nNodes: 1 (Primary)\nStatus: Healthy\nConsensus: Stable"
-}
-
-func (b *Butler) GetSkillsSummary() string {
-	reg := skills.GetRegistry()
-	all := reg.List()
-	
-	var sb strings.Builder
-	for _, s := range all {
-		sb.WriteString(fmt.Sprintf("- *%s*: %s\n", s.Name(), s.Description()))
-	}
-	return sb.String()
 }

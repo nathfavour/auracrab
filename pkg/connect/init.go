@@ -28,7 +28,4 @@ func init() {
 	if discordToken != "" && (discordEnabled == "" || discordEnabled == "true") {
 		RegisterChannel(&DiscordChannel{Token: discordToken})
 	}
-
-	// Register Browser Channel
-	RegisterChannel(NewBrowserChannel(9999))
 }
