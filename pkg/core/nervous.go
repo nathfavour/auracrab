@@ -9,6 +9,7 @@ import (
 
 	"github.com/nathfavour/auracrab/pkg/biology"
 	"github.com/nathfavour/auracrab/pkg/memory"
+	"github.com/nathfavour/auracrab/pkg/mission"
 	"github.com/nathfavour/auracrab/pkg/schema"
 )
 
@@ -38,6 +39,10 @@ func (ns *NervousSystem) Name() string {
 
 // Pulse implements spine.Cell
 func (ns *NervousSystem) Pulse(ctx context.Context) error {
+	// 1. Process Missions into Tasks
+	ns.processMissions(ctx)
+
+	// 2. Process all Tasks
 	tasks := ns.butler.ListTasks()
 
 	for _, task := range tasks {
@@ -71,6 +76,72 @@ func (ns *NervousSystem) Pulse(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (ns *NervousSystem) processMissions(ctx context.Context) {
+	activeMission := ns.butler.Missions.GetActiveMission()
+	if activeMission == nil {
+		return
+	}
+
+	executableTasks := activeMission.GetExecutableTasks()
+	for _, subTask := range executableTasks {
+		// Check if a task already exists for this subtask
+		exists := false
+		tasks := ns.butler.ListTasks()
+		subTaskTag := fmt.Sprintf("mission:%s:task:%s", activeMission.ID, subTask.ID)
+
+		for _, t := range tasks {
+			if t.Metadata != nil && t.Metadata["subtask_tag"] == subTaskTag {
+				exists = true
+				// Reconcile status if needed
+				if t.Status == TaskStatusCompleted && subTask.Status != mission.StatusCompleted {
+					_ = activeMission.UpdateSubTaskStatus(subTask.ID, mission.StatusCompleted, t.Result)
+					ns.butler.SendUpdate("", "", fmt.Sprintf("🎯 Mission Subtask Completed: %s", subTask.Title))
+				} else if t.Status == TaskStatusFailed && subTask.Status != mission.StatusFailed {
+					_ = activeMission.UpdateSubTaskStatus(subTask.ID, mission.StatusFailed, t.Result)
+				}
+				break
+			}
+		}
+
+		if !exists {
+			// Create a new Butler task for this mission subtask
+			content := fmt.Sprintf("MISSION: %s\nSUBTASK: %s\nGOAL: %s", activeMission.Title, subTask.Title, subTask.Description)
+			task, err := ns.butler.StartTask(ctx, content, "mission", "internal", "")
+			if err == nil {
+				ns.butler.mu.Lock()
+				if task.Metadata == nil {
+					task.Metadata = make(map[string]string)
+				}
+				task.Metadata["subtask_tag"] = subTaskTag
+				task.Metadata["mission_id"] = activeMission.ID
+				task.Metadata["subtask_id"] = subTask.ID
+				ns.butler.mu.Unlock()
+				ns.butler.save()
+				ns.butler.SendUpdate("", "", fmt.Sprintf("🚀 Mission Task Dispatched: %s", subTask.Title))
+			}
+		}
+	}
+
+	// Update mission progress based on subtasks
+	if len(activeMission.Tasks) > 0 {
+		completedCount := 0
+		for _, t := range activeMission.Tasks {
+			if t.Status == mission.StatusCompleted {
+				completedCount++
+			}
+		}
+		newProgress := float64(completedCount) / float64(len(activeMission.Tasks))
+		if newProgress != activeMission.Progress {
+			_ = ns.butler.Missions.UpdateProgress(activeMission.ID, newProgress, activeMission.EstimatedTTC)
+
+			if newProgress >= 1.0 {
+				_ = ns.butler.Missions.CompleteMission(activeMission.ID)
+				ns.butler.SendUpdate("", "", fmt.Sprintf("🏆 MISSION ACCOMPLISHED: %s", activeMission.Title))
+			}
+		}
+	}
 }
 
 func (ns *NervousSystem) initialPlanning(ctx context.Context, task *Task) {
