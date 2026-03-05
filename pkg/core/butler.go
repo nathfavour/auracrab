@@ -227,79 +227,6 @@ func (b *Butler) handleChannelMessage(platform string, chatID string, from strin
 	return reply
 }
 
-	cwd, _ := os.Getwd()
-	files, _ := filepath.Glob("*")
-	if len(files) > 25 {
-		files = files[:25]
-	}
-	dirSnapshot := strings.Join(files, "\n")
-	if dirSnapshot == "" {
-		dirSnapshot = "(no files discovered)"
-	}
-
-	customPrompt := fmt.Sprintf(
-		"AURACRAB_CUSTOM_PROMPT_TEMPLATE\nWORKING_DIRECTORY:\n%s\n\nPROJECT_FILES_SNAPSHOT:\n%s\n\nUSER_PROMPT:\n%s\n\nOUTPUT_RULES:\n- Return the final actionable answer only.\n- Do not include chain-of-thought or hidden reasoning.\n- Be concrete, execution-oriented, and directly useful.",
-		cwd,
-		dirSnapshot,
-		prompt,
-	)
-
-	client := vibe.NewClient()
-	reply, err := client.Query(customPrompt, intent)
-	if err != nil {
-		return "", err
-	}
-	reply = strings.TrimSpace(reply)
-	if reply == "" {
-		return "", fmt.Errorf("empty response from vibeauracle")
-	}
-	return reply, nil
-}
-
-func (b *Butler) handleChannelMessage(from string, text string) string {
-	if text == "get_status_internal" {
-		return fmt.Sprintf("%s\n%s", b.GetStatus(), b.WatchHealth())
-	}
-
-	// Record incoming message in history
-	convID, err := b.History.GetOrCreateConversationForPlatform("messaging", from)
-	if err == nil {
-		_ = b.History.AddMessage(convID, "user", text)
-	}
-
-	if strings.HasPrefix(text, "@") {
-		parts := strings.SplitN(text, " ", 2)
-		if len(parts) > 1 {
-			crabID := strings.TrimPrefix(parts[0], "@")
-			if c, err := b.registry.Get(crabID); err == nil {
-				// Start task with crab's specialized instructions
-				augmentedTask := fmt.Sprintf("CRAB AGENT: %s\nINSTRUCTIONS: %s\n\nUSER TASK: %s", c.Name, c.Instructions, parts[1])
-				task, err := b.StartTask(context.Background(), augmentedTask, convID)
-				if err != nil {
-					return fmt.Sprintf("Error starting delegated task: %v", err)
-				}
-				reply := fmt.Sprintf("Delegated to agent '%s' (Task ID: %s)", c.Name, task.ID)
-				if err == nil {
-					_ = b.History.AddMessage(convID, "assistant", reply)
-				}
-				return reply
-			}
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-
-	reply, err := b.QueryWithContext(ctx, text, "vibe")
-	if err != nil {
-		return fmt.Sprintf("Error processing prompt: %v", err)
-	}
-	if convID != "" {
-		_ = b.History.AddMessage(convID, "assistant", reply)
-	}
-	return reply
-}
-
 func (b *Butler) load() {
 	path := config.TasksPath()
 	data, err := os.ReadFile(path)
@@ -319,7 +246,7 @@ func (b *Butler) save() {
 	_ = os.WriteFile(path, data, 0644)
 }
 
-func (b *Butler) StartTask(ctx context.Context, content string, convID string) (*Task, error) {
+func (b *Butler) StartTask(ctx context.Context, content string, platform string, chatID string, convID string) (*Task, error) {
 	b.mu.Lock()
 	id := fmt.Sprintf("task_%d", time.Now().Unix())
 	task := &Task{
@@ -327,6 +254,8 @@ func (b *Butler) StartTask(ctx context.Context, content string, convID string) (
 		Content:   content,
 		Status:    TaskStatusPending,
 		StartedAt: time.Now(),
+		Platform:  platform,
+		ChatID:    chatID,
 	}
 	b.tasks[id] = task
 	b.mu.Unlock()

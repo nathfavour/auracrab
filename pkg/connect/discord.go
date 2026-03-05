@@ -22,7 +22,7 @@ func (d *DiscordChannel) Name() string {
 	return "discord"
 }
 
-func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, text string) string) error {
+func (d *DiscordChannel) Start(ctx context.Context, onMessage func(platform string, chatID string, from string, text string) string) error {
 	var err error
 	d.history, err = memory.NewHistoryStore()
 	if err != nil {
@@ -90,7 +90,7 @@ func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, 
 				if !isAllowed {
 					return
 				}
-				reply := onMessage(from, "get_status_internal")
+				reply := onMessage("discord", m.ChannelID, from, "get_status_internal")
 				s.ChannelMessageSend(m.ChannelID, "📊 **System Status**\n"+reply)
 				return
 			}
@@ -102,7 +102,7 @@ func (d *DiscordChannel) Start(ctx context.Context, onMessage func(from string, 
 		}
 
 		// Dispatch to Butler
-		reply := onMessage(from, text)
+		reply := onMessage("discord", m.ChannelID, from, text)
 		if len(reply) > 1900 {
 			reply = reply[:1897] + "..."
 		}
