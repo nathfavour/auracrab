@@ -235,6 +235,36 @@ func (b *Butler) handleChannelMessage(platform string, chatID string, from strin
 	return reply
 }
 
+func (b *Butler) QueryMetabolic(ctx context.Context, prompt string, intent string, signature *ThoughtSignature, fovea *Fovea) (provider.CompletionResponse, error) {
+	metabolizer := NewMetabolizer(b)
+	livingPrompt := metabolizer.Build(prompt, signature, fovea)
+
+	return b.QueryWithContext(ctx, livingPrompt, intent)
+}
+
+func (b *Butler) SendUpdate(platform, chatID, text string) {
+	if platform == "" || chatID == "" {
+		fmt.Printf("BUTLER UPDATE: %s\n", text)
+		return
+	}
+
+	social.GetBotManager().SendMessage(platform, chatID, text)
+}
+
+func (b *Butler) SendUpdateExt(platform, chatID, text string, lazy bool) {
+	if platform == "" || chatID == "" {
+		fmt.Printf("BUTLER UPDATE (lazy=%v): %s\n", lazy, text)
+		return
+	}
+
+	if lazy {
+		// Throttled/Lazy I/O logic could go here
+		social.GetBotManager().SendMessage(platform, chatID, text)
+	} else {
+		social.GetBotManager().SendMessage(platform, chatID, text)
+	}
+}
+
 func (b *Butler) load() {
 	path := config.TasksPath()
 	data, err := os.ReadFile(path)
