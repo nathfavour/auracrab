@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nathfavour/auracrab/internal/provider"
 	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/connect"
 	"github.com/nathfavour/auracrab/pkg/crabs"
@@ -92,11 +93,21 @@ func GetButler() *Butler {
 			History:   hist,
 			Missions:  miss,
 			Ego:       eg,
+			Spine:     spine.NewSpine(time.Second),
 		}
 		instance.load()
+		instance.setupSpine()
 		instance.setupCron()
 	})
 	return instance
+}
+
+func (b *Butler) setupSpine() {
+	ns := NewNervousSystem(b)
+	b.Spine.Attach(ns)
+
+	// Attach other cells as they are implemented
+	// b.Spine.Attach(immune.GetImmuneSystem())
 }
 
 func (b *Butler) Serve(ctx context.Context) error {
@@ -132,6 +143,9 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Start scheduler
 	go b.scheduler.Start(ctx)
 
+	// Start Spine
+	go b.Spine.Breathes(ctx)
+
 	<-ctx.Done()
 	b.mu.Lock()
 	b.running = false
@@ -142,7 +156,7 @@ func (b *Butler) Serve(ctx context.Context) error {
 func (b *Butler) setupCron() {
 	// Periodic system sanity Check
 	b.scheduler.Schedule("security_audit", 24*time.Hour, func(ctx context.Context) {
-		_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "")
+		_, _ = b.StartTask(ctx, "run security audit and log results to ~/.auracrab/audits.log", "system", "internal", "")
 	})
 
 	// Memory sync or cleanup can happen here
@@ -271,11 +285,12 @@ func (b *Butler) executeTask(id, content string, convID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	reply, err := b.QueryWithContext(ctx, content, "vibe")
+	resp, err := b.QueryWithContext(ctx, content, "vibe")
 	if err != nil {
 		b.updateStatus(id, TaskStatusFailed, fmt.Sprintf("Error querying vibeauracle: %v", err))
 		return
 	}
+	reply := resp.Content
 	b.mu.Lock()
 	if t, ok := b.tasks[id]; ok {
 		t.Logs = append(t.Logs, reply)

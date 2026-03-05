@@ -8,7 +8,52 @@ import (
 	"github.com/hjson/hjson-go/v4"
 )
 
-// --- Prompt Schema ---
+// --- Task Continuity Schema ---
+
+type TaskContinuity struct {
+	Version        string           `json:"version"`
+	TaskID         string           `json:"task_id"`
+	Goal           string           `json:"goal"`
+	Status         string           `json:"status"`
+	Plan           []ContinuityStep `json:"plan"`
+	Cursor         int              `json:"cursor"`
+	PulseCount     int              `json:"pulse_count"`
+	RemainingSteps []string         `json:"remaining_steps"`
+	Anomalies      []string         `json:"anomalies"`
+	Memory         ContinuityMemory `json:"memory"`
+	Meta           ContinuityMeta   `json:"meta"`
+	LastCheckpoint int64            `json:"last_checkpoint"`
+}
+
+type ContinuityStep struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	Result      string `json:"result,omitempty"`
+	Weight      int    `json:"weight,omitempty"`
+}
+
+type ContinuityMemory struct {
+	HabituationKey string   `json:"habituation_key,omitempty"`
+	HistoryRefs    []string `json:"history_refs,omitempty"`
+	VectorRefs     []string `json:"vector_refs,omitempty"`
+}
+
+type ContinuityMeta struct {
+	RetryCount   int     `json:"retry_count"`
+	MaxRetries   int     `json:"max_retries"`
+	EnergyBudget float64 `json:"energy_budget"`
+	LastError    string  `json:"last_error,omitempty"`
+}
+
+func (tc *TaskContinuity) Validate() error {
+	if tc.TaskID == "" || tc.Goal == "" {
+		return fmt.Errorf("invalid continuity: missing task_id or goal")
+	}
+	return nil
+}
+
+// Existing Prompt Schema ---
 
 type ProjectTopology struct {
 	Files            []string `json:"files"`
