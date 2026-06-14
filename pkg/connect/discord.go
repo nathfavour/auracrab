@@ -154,6 +154,14 @@ func (d *DiscordChannel) Broadcast(message string) error {
 	return nil
 }
 
+func (d *DiscordChannel) Send(to string, text string) error {
+	if d.session == nil {
+		return fmt.Errorf("discord session not initialized")
+	}
+	_, err := d.session.ChannelMessageSend(to, text)
+	return err
+}
+
 func init() {
 	// Discord will be registered in init.go if token is present
 }
