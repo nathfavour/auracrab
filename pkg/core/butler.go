@@ -131,6 +131,9 @@ func (b *Butler) Serve(ctx context.Context) error {
 	// Start Social Bots (POC Migration)
 	social.GetBotManager().StartBots(ctx, b.History, b, b.handleChannelMessage)
 
+	// Start continuous social daemon loop
+	go social.GetManager().Start(ctx, b)
+
 	// Initial health check
 	fmt.Println(b.WatchHealth())
 
