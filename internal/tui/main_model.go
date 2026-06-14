@@ -427,7 +427,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Start as task
-				_, _ = core.GetButler().StartTask(context.Background(), val, "")
+				_, _ = core.GetButler().StartTask(context.Background(), val, "tui", "internal", "")
 				m.lastResponse = "Task started: " + val
 			}
 		}

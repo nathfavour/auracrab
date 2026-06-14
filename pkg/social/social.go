@@ -164,7 +164,7 @@ func (m *Manager) Start(ctx context.Context, querier ContextualQuerier) {
 					continue
 				}
 
-				content := strings.TrimSpace(resp.Text)
+				content := strings.TrimSpace(resp.Content)
 				if content == "" {
 					log.Println("[Social] Generated content was empty, skipping.")
 					continue

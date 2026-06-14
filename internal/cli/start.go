@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nathfavour/auracrab/internal/tui"
-	"github.com/nathfavour/auracrab/pkg/config"
 	"github.com/nathfavour/auracrab/pkg/core"
 	"github.com/spf13/cobra"
 )
