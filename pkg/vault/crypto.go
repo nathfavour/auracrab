@@ -12,9 +12,10 @@ import (
 	"os"
 	"runtime"
 	"strings"
-
-	"github.com/nathfavour/auracrab/pkg/config"
 )
+
+// SecretsPathFunc allows breaking import cycles by receiving the path from another package
+var SecretsPathFunc func() string
 
 // EncryptedPayload represents the structure of the encrypted secrets file
 type EncryptedPayload struct {
@@ -140,7 +141,10 @@ func Mask(s string) string {
 
 // loadSecrets reads and decrypts the secrets from disk
 func loadSecrets() (map[string]string, error) {
-	path := config.SecretsPath()
+	if SecretsPathFunc == nil {
+		return nil, fmt.Errorf("SecretsPathFunc not initialized")
+	}
+	path := SecretsPathFunc()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -182,5 +186,8 @@ func saveSecrets(secrets map[string]string) error {
 		return err
 	}
 
-	return os.WriteFile(config.SecretsPath(), encrypted, 0600)
+	if SecretsPathFunc == nil {
+		return fmt.Errorf("SecretsPathFunc not initialized")
+	}
+	return os.WriteFile(SecretsPathFunc(), encrypted, 0600)
 }

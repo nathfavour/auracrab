@@ -3,7 +3,13 @@ package config
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/nathfavour/auracrab/pkg/vault"
 )
+
+func init() {
+	vault.SecretsPathFunc = SecretsPath
+}
 
 var (
 	Version      = "dev"
