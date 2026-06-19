@@ -4,15 +4,23 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"path/filepath"
+	"time"
 )
 
-// SocketPath returns the default path to the Anyisland socket
+// SocketPath returns the anyisland UDS path (aligned with anyisland/pkg/ipc).
 func SocketPath() string {
-	if path := os.Getenv("ANYISLAND_IPC_SOCK"); path != "" {
-		return path
+	if v := os.Getenv("ANYISLAND_SOCKET"); v != "" {
+		return v
+	}
+	if v := os.Getenv("ANYISLAND_IPC_SOCK"); v != "" {
+		return v
+	}
+	if run := os.Getenv("AGENTIC_RUN_DIR"); run != "" {
+		return filepath.Join(run, "anyisland.sock")
 	}
 	home, _ := os.UserHomeDir()
-	return home + "/.anyisland/anyisland.sock"
+	return filepath.Join(home, ".anyisland", "anyisland.sock")
 }
 
 // IsManaged checks if the current process is being managed by Anyisland
@@ -22,7 +30,7 @@ func IsManaged() bool {
 		return false
 	}
 
-	conn, err := net.Dial("unix", socketPath)
+	conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
 	if err != nil {
 		return false
 	}
@@ -45,7 +53,7 @@ func IsManaged() bool {
 
 // VisualShot sends an ANSI string to the Anyisland visual service to capture a screenshot
 func VisualShot(tool string, ansi string) (string, error) {
-	conn, err := net.Dial("unix", SocketPath())
+	conn, err := net.DialTimeout("unix", SocketPath(), 2*time.Second)
 	if err != nil {
 		return "", err
 	}

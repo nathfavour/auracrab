@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+func vibeSocketPath() string {
+	if v := os.Getenv("VIBEAURA_SOCKET"); v != "" {
+		return v
+	}
+	if v := os.Getenv("VIBEIPC_SOCK"); v != "" {
+		return v
+	}
+	if run := os.Getenv("AGENTIC_RUN_DIR"); run != "" {
+		return filepath.Join(run, "vibeaura.sock")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".vibeauracle", "vibeaura.sock")
+}
+
 type Request struct {
 	Type    string      `json:"type"`
 	Method  string      `json:"method"`
@@ -36,9 +50,8 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	home, _ := os.UserHomeDir()
 	return &Client{
-		socketPath: filepath.Join(home, ".vibeauracle", "vibeaura.sock"),
+		socketPath: vibeSocketPath(),
 	}
 }
 
