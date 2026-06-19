@@ -6,11 +6,11 @@
   "source_dir": "~/.auracrab/source",
   "install_dir": "~/.local/bin",
   "build": {
+    "toolchain": "shell",
     "steps": [
       "CGO_ENABLED=0 make build"
     ],
-    "bin": "bin/auracrab",
-    "toolchain": "go"
+    "bin": "bin/auracrab"
   },
   "runtime": {
     "dependencies": [

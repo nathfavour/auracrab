@@ -2,6 +2,8 @@ module github.com/nathfavour/auracrab
 
 go 1.24.0
 
+toolchain go1.25.5
+
 require (
 	github.com/99designs/keyring v1.2.2
 	github.com/bwmarrin/discordgo v0.29.0
