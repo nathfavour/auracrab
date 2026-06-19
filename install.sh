@@ -160,14 +160,13 @@ SHELL_RC=""
 [ -f "$HOME/.bashrc" ] && [ -z "$SHELL_RC" ] && SHELL_RC="$HOME/.bashrc"
 
 if [ -n "$SHELL_RC" ]; then
-    if ! grep -q "$INSTALL_DIR" "$SHELL_RC" 2>/dev/null;
- then
+    if ! grep -q "$INSTALL_DIR" "$SHELL_RC" 2>/dev/null; then
         echo "" >> "$SHELL_RC"
         echo "# auracrab path" >> "$SHELL_RC"
-        echo "export PATH=\"
-$PATH:$INSTALL_DIR\"" >> "$SHELL_RC"
+        echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_RC"
         echo "Added $INSTALL_DIR to $SHELL_RC"
     fi
 fi
 
 echo "Done. Run 'auracrab start' to begin."
+echo "To install the polygeist orchestration stack: auracrab stack install polygeist"

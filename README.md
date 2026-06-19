@@ -110,6 +110,8 @@ make build
 | Command | Action |
 | :--- | :--- |
 | `auracrab start` | Spin up the butler daemon |
+| `auracrab stack install polygeist` | Install the polygeist orchestration stack |
+| `auracrab stack list` | List internal libraries and well-known tools |
 | `auracrab vibe` | Enter the interactive TUI |
 | `auracrab crab list` | View your specialized agents |
 | `auracrab vault set` | Securely store API secrets |
