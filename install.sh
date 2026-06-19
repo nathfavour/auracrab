@@ -169,4 +169,4 @@ if [ -n "$SHELL_RC" ]; then
 fi
 
 echo "Done. Run 'auracrab start' to begin."
-echo "To install the polygeist orchestration stack: curl -sSL https://raw.githubusercontent.com/nathfavour/polygeist/main/install.sh | bash"
+echo "To install the polygeist orchestration stack: curl -sSL https://raw.githubusercontent.com/nathfavour/polygeist/master/install.sh | bash"

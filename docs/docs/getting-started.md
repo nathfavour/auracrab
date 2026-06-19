@@ -10,7 +10,7 @@ Get Auracrab up and running on your system in minutes.
 
 ### Quick Install (Shell)
 ```bash
-curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/master/install.sh | bash
 ```
 
 ### Build from Source

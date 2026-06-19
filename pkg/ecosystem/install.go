@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	anyislandInstallURL = "https://raw.githubusercontent.com/nathfavour/anyisland/main/install.sh"
+	anyislandInstallURL = "https://raw.githubusercontent.com/nathfavour/anyisland/master/install.sh"
 	polygeistEnvMarker  = "# polygeist agentic stack"
 )
 

@@ -1,7 +1,7 @@
 # 🦀 AURACRAB
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/nathfavour/auracrab/main/assets/logo.png" width="200" alt="Auracrab Logo">
+  <img src="https://raw.githubusercontent.com/nathfavour/auracrab/master/assets/logo.png" width="200" alt="Auracrab Logo">
   <br>
   <b>The Autonomous Digital Butler for the Agentic Era.</b>
   <br>
@@ -90,7 +90,7 @@ anyisland install nathfavour/auracrab
 
 **Via Shell:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/nathfavour/auracrab/master/install.sh | bash
 ```
 
 **Via Go:**
